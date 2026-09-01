@@ -1,0 +1,16 @@
+[package]
+name = "depthai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Safe Rust wrapper for Luxonis depthai-core v3 (OAK cameras): Device, Pipeline, Camera, Sync, StereoDepth, VideoEncoder, IMU, calibration"
+keywords = ["depthai", "luxonis", "oak", "camera", "stereo"]
+categories = ["api-bindings", "computer-vision", "hardware-support"]
+readme = "../README.md"
+
+[dependencies]
+depthai-sys = { workspace = true }
+thiserror = { workspace = true }

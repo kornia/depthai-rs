@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["depthai-sys", "depthai"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/kornia/depthai-rs"
+authors = ["Edgar Riba <edgar.riba@gmail.com>"]
+
+[workspace.dependencies]
+depthai-sys = { path = "depthai-sys", version = "0.1.0" }
+thiserror = "2.0"
+cmake = "0.1"
+cc = "1"

@@ -1,0 +1,113 @@
+//! [`Pipeline`]: the node graph that runs on a device.
+
+use std::ptr::NonNull;
+use std::sync::Arc;
+
+use depthai_sys as sys;
+
+use crate::device::Device;
+use crate::error::{check, take_native_error, Result};
+use crate::node::NodeType;
+
+pub(crate) struct PipelineInner {
+    raw: NonNull<sys::dai_pipeline>,
+    device: Option<Device>,
+}
+
+// SAFETY: PipelineImpl serialises its state internally; the handle is unique on
+// the C++ side and shared here through the Arc.
+unsafe impl Send for PipelineInner {}
+unsafe impl Sync for PipelineInner {}
+
+impl Drop for PipelineInner {
+    fn drop(&mut self) {
+        // The shim stops a running pipeline before destroying it.
+        unsafe { sys::dai_pipeline_release(self.raw.as_ptr()) };
+    }
+}
+
+/// A `dai::Pipeline`. Cloning shares the same pipeline; nodes created from it
+/// keep it alive, and it keeps its [`Device`] alive.
+///
+/// Build the graph (create nodes, request outputs, link, create queues), then
+/// [`start`](Self::start). Configure from one thread before starting.
+#[derive(Clone)]
+pub struct Pipeline {
+    inner: Arc<PipelineInner>,
+}
+
+impl std::fmt::Debug for Pipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pipeline").finish_non_exhaustive()
+    }
+}
+
+impl Pipeline {
+    /// A pipeline bound to `device` (`dai::Pipeline(std::shared_ptr<Device>)`).
+    pub fn new(device: &Device) -> Result<Pipeline> {
+        let mut raw: *mut sys::dai_pipeline = std::ptr::null_mut();
+        check(unsafe { sys::dai_pipeline_new(device.raw(), &mut raw) })?;
+        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        Ok(Pipeline {
+            inner: Arc::new(PipelineInner {
+                raw,
+                device: Some(device.clone()),
+            }),
+        })
+    }
+
+    /// A pipeline with no device (`dai::Pipeline(false)`): build and inspect a
+    /// graph without hardware. Cannot start.
+    pub fn host_only() -> Result<Pipeline> {
+        let mut raw: *mut sys::dai_pipeline = std::ptr::null_mut();
+        check(unsafe { sys::dai_pipeline_new_host_only(&mut raw) })?;
+        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        Ok(Pipeline {
+            inner: Arc::new(PipelineInner { raw, device: None }),
+        })
+    }
+
+    pub(crate) fn raw(&self) -> *mut sys::dai_pipeline {
+        self.inner.raw.as_ptr()
+    }
+
+    /// The device this pipeline runs on (`None` for [`host_only`](Self::host_only)).
+    pub fn device(&self) -> Option<&Device> {
+        self.inner.device.as_ref()
+    }
+
+    /// Create a node: `pipeline.create::<Camera>()?`.
+    pub fn create<N: NodeType>(&self) -> Result<N> {
+        N::create(self)
+    }
+
+    pub fn build(&self) -> Result<()> {
+        check(unsafe { sys::dai_pipeline_build(self.raw()) })
+    }
+
+    /// Build (if needed), upload and start the pipeline on the device.
+    pub fn start(&self) -> Result<()> {
+        check(unsafe { sys::dai_pipeline_start(self.raw()) })
+    }
+
+    pub fn stop(&self) -> Result<()> {
+        check(unsafe { sys::dai_pipeline_stop(self.raw()) })
+    }
+
+    /// Block until the pipeline stops.
+    pub fn wait(&self) -> Result<()> {
+        check(unsafe { sys::dai_pipeline_wait(self.raw()) })
+    }
+
+    pub fn is_running(&self) -> Result<bool> {
+        let mut v = 0;
+        check(unsafe { sys::dai_pipeline_is_running(self.raw(), &mut v) })?;
+        Ok(v != 0)
+    }
+
+    pub fn is_built(&self) -> Result<bool> {
+        let mut v = 0;
+        check(unsafe { sys::dai_pipeline_is_built(self.raw(), &mut v) })?;
+        Ok(v != 0)
+    }
+}

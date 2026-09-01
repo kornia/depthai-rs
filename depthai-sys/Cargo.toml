@@ -1,0 +1,28 @@
+[package]
+name = "depthai-sys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Raw FFI to Luxonis depthai-core v3 through a hand-written pure-C shim (no autocxx/bindgen)"
+keywords = ["depthai", "luxonis", "oak", "ffi", "camera"]
+categories = ["external-ffi-bindings", "computer-vision"]
+# One copy of the native library per graph: cargo refuses two packages with the
+# same `links` key, so nothing can half-migrate onto a second depthai binding.
+links = "depthai-core"
+build = "build.rs"
+include = ["Cargo.toml", "README.md", "build.rs", "src/**", "csrc/**", "scripts/**"]
+
+[features]
+default = []
+# Build depthai-core from the pinned `vendor/depthai-core` submodule when
+# DEPTHAI_PREFIX is unset. Slow (10-30 min) and RAM-capped; see build.rs.
+vendored = []
+
+[dependencies]
+
+[build-dependencies]
+cmake = { workspace = true }
+cc = { workspace = true }
