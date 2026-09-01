@@ -45,9 +45,8 @@ int dai_pipeline_create_imu(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
 void dai_node_release(dai_node* n) {}
 int dai_node_id(const dai_node* n, int64_t* out) { return DAI_ERR; }
 int dai_node_type_name(const dai_node* n, const char** out) { return DAI_ERR; }
-int dai_node_output(dai_node* n, const char* group, const char* name, dai_output** out) { return DAI_ERR; }
-int dai_node_input(dai_node* n, const char* group, const char* name, dai_input** out) { return DAI_ERR; }
-int dai_node_input_map_get(dai_node* n, const char* map_name, const char* key, dai_input** out) { return DAI_ERR; }
+int dai_node_output_ref(dai_node* n, const char* group, const char* name, dai_output** out) { return DAI_ERR; }
+int dai_node_input_ref(dai_node* n, const char* group, const char* name, dai_input** out) { return DAI_ERR; }
 int dai_node_output_names(dai_node* n, char** out) { return DAI_ERR; }
 int dai_node_input_names(dai_node* n, char** out) { return DAI_ERR; }
 int dai_output_name(dai_output* o, char** out) { return DAI_ERR; }
@@ -60,6 +59,7 @@ int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t se
 int dai_camera_board_socket(const dai_node* cam, int32_t* out) { return DAI_ERR; }
 int dai_camera_request_output(dai_node* cam, uint32_t w, uint32_t h, int32_t type, int32_t resize_mode, float fps, int32_t undistort, dai_output** out) { return DAI_ERR; }
 int dai_camera_request_full_resolution_output(dai_node* cam, int32_t type, float fps, int use_highest_resolution, dai_output** out) { return DAI_ERR; }
+int dai_sync_input(dai_node* s, const char* key, dai_input** out) { return DAI_ERR; }
 int dai_sync_set_sync_threshold_ns(dai_node* s, int64_t ns) { return DAI_ERR; }
 int dai_sync_set_sync_attempts(dai_node* s, int32_t attempts) { return DAI_ERR; }
 int dai_sync_set_run_on_host(dai_node* s, int run_on_host) { return DAI_ERR; }

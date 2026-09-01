@@ -116,18 +116,18 @@ impl NodeHandle {
             .collect())
     }
 
-    /// Look up a fixed output port by name (any group). `Ok(None)` when absent.
+    /// `Node::getOutputRef(name)` in the default group. `Ok(None)` when absent.
     pub fn output_by_name(&self, name: &str) -> Result<Option<Output<AnyMessage>>> {
         self.output_typed(name)
     }
 
-    /// Look up a fixed input port by name (any group). `Ok(None)` when absent.
+    /// `Node::getInputRef(name)` in the default group. `Ok(None)` when absent.
     pub fn input_by_name(&self, name: &str) -> Result<Option<Input>> {
         let c = cstring(name)?;
         let mut out: *mut sys::dai_input = std::ptr::null_mut();
         let empty = c"";
         if !check_poll(unsafe {
-            sys::dai_node_input(self.raw(), empty.as_ptr(), c.as_ptr(), &mut out)
+            sys::dai_node_input_ref(self.raw(), empty.as_ptr(), c.as_ptr(), &mut out)
         })? {
             return Ok(None);
         }
@@ -135,15 +135,10 @@ impl NodeHandle {
         Ok(Some(unsafe { Input::from_raw(self.clone(), raw) }))
     }
 
-    /// A key of an input map (get-or-create), e.g. Sync's `inputs["left"]`.
-    pub fn input_map_get(&self, map_name: &str, key: &str) -> Result<Input> {
-        let m = cstring(map_name)?;
-        let k = cstring(key)?;
-        let mut out: *mut sys::dai_input = std::ptr::null_mut();
-        check(unsafe {
-            sys::dai_node_input_map_get(self.raw(), m.as_ptr(), k.as_ptr(), &mut out)
-        })?;
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
+    /// Wrap a port pointer the shim handed out for this node.
+    pub(crate) unsafe fn wrap_input(&self, raw: *mut sys::dai_input) -> Result<Input> {
+        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        // SAFETY: caller obtained `raw` from a shim call on this node.
         Ok(unsafe { Input::from_raw(self.clone(), raw) })
     }
 
@@ -152,7 +147,7 @@ impl NodeHandle {
         let mut out: *mut sys::dai_output = std::ptr::null_mut();
         let empty = c"";
         if !check_poll(unsafe {
-            sys::dai_node_output(self.raw(), empty.as_ptr(), c.as_ptr(), &mut out)
+            sys::dai_node_output_ref(self.raw(), empty.as_ptr(), c.as_ptr(), &mut out)
         })? {
             return Ok(None);
         }

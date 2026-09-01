@@ -5,6 +5,11 @@ pure-C shim + generated `extern "C"` block) and `depthai` (safe wrapper).
 
 ## Hard rules
 
+- **depthai-sys is RAW**: one C function per depthai-core member, named after it
+  (`dai_<class>_<member>`); overloads/`std::optional` collapse via sentinels that pick
+  the C++ default; `*_get_info` structs are plain copies of getters. No invented
+  members, no policy. The safe crate mirrors depthai-core's own abstractions (node
+  graph, typed ports, messages) and nothing else.
 - **No autocxx / bindgen / cxx.** The ABI is `depthai-sys/csrc/depthai_c.h`. Every
   function: `int` return (`DAI_OK`/`DAI_ERR`, polls `1/0/-1`), thread-local
   `dai_last_error()`, body wrapped in `DAI_GUARD`. Opaque handles; refcounted ones

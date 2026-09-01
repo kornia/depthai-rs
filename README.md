@@ -10,7 +10,9 @@ Rust and no `bindgen`/`autocxx`/`cxx` at build time.
 
 Pinned depthai-core: **v3.7.1**.
 
-The wrapper is deliberately **faithful and unopinionated**: it does not read
+`depthai-sys` is **raw**: one C function per depthai-core member, named after
+it; `std::optional`/overloads collapse into sentinels that select the C++
+default. The wrapper is deliberately **faithful and unopinionated**: it does not read
 environment variables, convert timestamps to wall-clock, clamp IMU rates,
 pick stereo presets, repack strides, or default the unit / spec-translation
 choices in the calibration getters. Those decisions belong to the driver built

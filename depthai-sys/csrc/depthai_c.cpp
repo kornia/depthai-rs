@@ -555,51 +555,26 @@ int dai_node_type_name(const dai_node* n, const char** out) {
         return DAI_OK;
     })
 }
-int dai_node_output(dai_node* n, const char* group, const char* name, dai_output** out) {
+int dai_node_output_ref(dai_node* n, const char* group, const char* name, dai_output** out) {
     DAI_REQUIRE(out && name, "null argument");
-    DAI_GUARD(dai_node_output, {
+    DAI_GUARD(dai_node_output_ref, {
         DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
-        const std::string want(name);
-        const std::string wantGroup(group ? group : "");
-        for(dai::Node::Output* o : n->ptr->getOutputRefs()) {
-            if(o->getName() == want && (wantGroup.empty() || o->getGroup() == wantGroup)) {
-                *out = from_output(o);
-                return 1;
-            }
-        }
-        return 0;
+        dai::Node::Output* o = n->ptr->getOutputRef(std::string(group ? group : ""), std::string(name));
+        if(!o) return 0;
+        *out = from_output(o);
+        return 1;
     })
 }
-int dai_node_input(dai_node* n, const char* group, const char* name, dai_input** out) {
+int dai_node_input_ref(dai_node* n, const char* group, const char* name, dai_input** out) {
     DAI_REQUIRE(out && name, "null argument");
-    DAI_GUARD(dai_node_input, {
+    DAI_GUARD(dai_node_input_ref, {
         DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
-        const std::string want(name);
-        const std::string wantGroup(group ? group : "");
-        for(dai::Node::Input* i : n->ptr->getInputRefs()) {
-            if(i->getName() == want && (wantGroup.empty() || i->getGroup() == wantGroup)) {
-                *out = from_input(i);
-                return 1;
-            }
-        }
-        return 0;
-    })
-}
-int dai_node_input_map_get(dai_node* n, const char* map_name, const char* key, dai_input** out) {
-    DAI_REQUIRE(out && map_name && key, "null argument");
-    DAI_GUARD(dai_node_input_map_get, {
-        DAI_LOCK_GRAPH;
-        DAI_REQUIRE(n && n->ptr, "null node handle");
-        // Node keeps its InputMap refs protected, so map access is per node type.
-        if(auto sync = std::dynamic_pointer_cast<dai::node::Sync>(n->ptr)) {
-            DAI_REQUIRE(std::string(map_name) == "inputs", "Sync has only the \"inputs\" map");
-            *out = from_input(&sync->inputs[std::string(key)]);
-            return DAI_OK;
-        }
-        set_err(std::string("node ") + n->ptr->getName() + " has no input map \"" + map_name + "\" known to depthai_c");
-        return DAI_ERR;
+        dai::Node::Input* i = n->ptr->getInputRef(std::string(group ? group : ""), std::string(name));
+        if(!i) return 0;
+        *out = from_input(i);
+        return 1;
     })
 }
 int dai_node_output_names(dai_node* n, char** out) {
@@ -741,6 +716,15 @@ int dai_camera_request_full_resolution_output(dai_node* cam, int32_t type, float
 // ---------------------------------------------------------------------------
 // Sync
 // ---------------------------------------------------------------------------
+int dai_sync_input(dai_node* s, const char* key, dai_input** out) {
+    DAI_REQUIRE(out && key, "null argument");
+    DAI_GUARD(dai_sync_input, {
+        DAI_LOCK_GRAPH;
+        auto sync = node_as<dai::node::Sync>(s, "Sync");
+        *out = from_input(&sync->inputs[std::string(key)]);
+        return DAI_OK;
+    })
+}
 int dai_sync_set_sync_threshold_ns(dai_node* s, int64_t ns) {
     DAI_GUARD(dai_sync_set_sync_threshold_ns, {
         DAI_LOCK_GRAPH;

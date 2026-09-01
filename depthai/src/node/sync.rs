@@ -22,7 +22,11 @@ impl Sync {
     /// (the Sync never emits) rather than an error; check
     /// [`input_names`](crate::node::Node::input_names) when debugging.
     pub fn input(&self, name: &str) -> Result<Input> {
-        self.0.input_map_get("inputs", name)
+        let c = crate::error::cstring(name)?;
+        let mut out: *mut depthai_sys::dai_input = std::ptr::null_mut();
+        check(unsafe { sys::dai_sync_input(self.0.raw(), c.as_ptr(), &mut out) })?;
+        // SAFETY: the port belongs to this Sync node.
+        unsafe { self.0.wrap_input(out) }
     }
 
     /// The grouped output.

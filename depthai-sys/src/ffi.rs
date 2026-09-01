@@ -74,22 +74,16 @@ extern "C" {
     pub fn dai_node_release(n: *mut dai_node);
     pub fn dai_node_id(n: *const dai_node, out: *mut i64) -> c_int;
     pub fn dai_node_type_name(n: *const dai_node, out: *mut *const c_char) -> c_int;
-    pub fn dai_node_output(
+    pub fn dai_node_output_ref(
         n: *mut dai_node,
         group: *const c_char,
         name: *const c_char,
         out: *mut *mut dai_output,
     ) -> c_int;
-    pub fn dai_node_input(
+    pub fn dai_node_input_ref(
         n: *mut dai_node,
         group: *const c_char,
         name: *const c_char,
-        out: *mut *mut dai_input,
-    ) -> c_int;
-    pub fn dai_node_input_map_get(
-        n: *mut dai_node,
-        map_name: *const c_char,
-        key: *const c_char,
         out: *mut *mut dai_input,
     ) -> c_int;
     pub fn dai_node_output_names(n: *mut dai_node, out: *mut *mut c_char) -> c_int;
@@ -130,6 +124,7 @@ extern "C" {
         use_highest_resolution: c_int,
         out: *mut *mut dai_output,
     ) -> c_int;
+    pub fn dai_sync_input(s: *mut dai_node, key: *const c_char, out: *mut *mut dai_input) -> c_int;
     pub fn dai_sync_set_sync_threshold_ns(s: *mut dai_node, ns: i64) -> c_int;
     pub fn dai_sync_set_sync_attempts(s: *mut dai_node, attempts: i32) -> c_int;
     pub fn dai_sync_set_run_on_host(s: *mut dai_node, run_on_host: c_int) -> c_int;

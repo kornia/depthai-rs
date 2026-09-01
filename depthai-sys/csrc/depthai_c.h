@@ -20,6 +20,12 @@
  *   - No policy: no defaults for calibration units/spec translation, no clock
  *     conversion, no env vars. Callers (the safe `depthai` crate and its users)
  *     own all of that.
+ *   - RAW: one C function <-> one depthai-core member, named after it
+ *     (dai_<class>_<member>). C++ overloads and std::optional arguments collapse
+ *     into one function with sentinels (NULL/"" string, negative number) that
+ *     select the C++ default; a *_get_info struct is a plain copy of that
+ *     object's getters, nothing derived. If depthai-core has no such member,
+ *     this ABI does not invent one.
  */
 #ifndef DEPTHAI_C_H
 #define DEPTHAI_C_H
@@ -330,13 +336,10 @@ void dai_node_release(dai_node* n);
 int dai_node_id(const dai_node* n, int64_t* out);
 /* Node::getName() — static storage, do not free. */
 int dai_node_type_name(const dai_node* n, const char** out);
-/* Fixed ports by descriptor name (group "" matches any group).
- * Returns 1 found / 0 absent / -1 error. */
-int dai_node_output(dai_node* n, const char* group, const char* name, dai_output** out);
-int dai_node_input(dai_node* n, const char* group, const char* name, dai_input** out);
-/* Map ports (e.g. Sync's `inputs["left"]`): get-or-CREATE, like InputMap::operator[].
- * `map_name` is the map's own name ("inputs" on Sync). */
-int dai_node_input_map_get(dai_node* n, const char* map_name, const char* key, dai_input** out);
+/* Node::getOutputRef(group, name) / getInputRef(group, name). `group` NULL or ""
+ * = the default group. Returns 1 found / 0 absent / -1 error. */
+int dai_node_output_ref(dai_node* n, const char* group, const char* name, dai_output** out);
+int dai_node_input_ref(dai_node* n, const char* group, const char* name, dai_input** out);
 /* Newline-joined "group/name" list of every output / input ref. */
 int dai_node_output_names(dai_node* n, char** out);
 int dai_node_input_names(dai_node* n, char** out);
@@ -367,6 +370,8 @@ int dai_camera_request_full_resolution_output(dai_node* cam, int32_t type, float
 /* ------------------------------------------------------------------------- */
 /* Sync                                                                       */
 /* ------------------------------------------------------------------------- */
+/* Sync::inputs[key]: get-or-CREATE, like InputMap::operator[]. */
+int dai_sync_input(dai_node* s, const char* key, dai_input** out);
 int dai_sync_set_sync_threshold_ns(dai_node* s, int64_t ns);
 int dai_sync_set_sync_attempts(dai_node* s, int32_t attempts);
 int dai_sync_set_run_on_host(dai_node* s, int run_on_host);
