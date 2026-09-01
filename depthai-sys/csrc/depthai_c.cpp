@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -193,6 +194,16 @@ static void set_err(const std::string& m) {
         set_err(msg);          \
         return DAI_ERR;        \
     }
+
+// Graph-configuration lock. depthai-core's Node / Node::Output / Node::Input
+// have NO internal synchronisation (plain vector push_back in link(), plain
+// member writes in every setter, PipelineImpl::outputQueues push in
+// createOutputQueue). The safe Rust crate marks node and port handles Sync on the
+// strength of THIS mutex: every entry point that touches a node, a port, or
+// builds/starts the pipeline takes it. Configuration is a pre-start, one-time
+// activity, so a single global lock costs nothing.
+static std::mutex g_graph_mutex;
+#define DAI_LOCK_GRAPH std::lock_guard<std::mutex> dai_graph_lock_(g_graph_mutex)
 
 static char* dup_string(const std::string& s) {
     char* out = static_cast<char*>(std::malloc(s.size() + 1));
@@ -469,12 +480,14 @@ void dai_pipeline_release(dai_pipeline* p) {
 }
 int dai_pipeline_build(dai_pipeline* p) {
     DAI_GUARD(dai_pipeline_build, {
+        DAI_LOCK_GRAPH;
         pipeline_of(p).build();
         return DAI_OK;
     })
 }
 int dai_pipeline_start(dai_pipeline* p) {
     DAI_GUARD(dai_pipeline_start, {
+        DAI_LOCK_GRAPH;
         pipeline_of(p).start();
         return DAI_OK;
     })
@@ -509,6 +522,7 @@ int dai_pipeline_is_built(const dai_pipeline* p, int* out) {
     int fn(dai_pipeline* p, dai_node** out) {                      \
         DAI_REQUIRE(out, "null out pointer");                      \
         DAI_GUARD(fn, {                                            \
+            DAI_LOCK_GRAPH;                                        \
             *out = wrap_node(pipeline_of(p).create<NodeType>());   \
             return DAI_OK;                                         \
         })                                                         \
@@ -544,6 +558,7 @@ int dai_node_type_name(const dai_node* n, const char** out) {
 int dai_node_output(dai_node* n, const char* group, const char* name, dai_output** out) {
     DAI_REQUIRE(out && name, "null argument");
     DAI_GUARD(dai_node_output, {
+        DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
         const std::string want(name);
         const std::string wantGroup(group ? group : "");
@@ -559,6 +574,7 @@ int dai_node_output(dai_node* n, const char* group, const char* name, dai_output
 int dai_node_input(dai_node* n, const char* group, const char* name, dai_input** out) {
     DAI_REQUIRE(out && name, "null argument");
     DAI_GUARD(dai_node_input, {
+        DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
         const std::string want(name);
         const std::string wantGroup(group ? group : "");
@@ -574,6 +590,7 @@ int dai_node_input(dai_node* n, const char* group, const char* name, dai_input**
 int dai_node_input_map_get(dai_node* n, const char* map_name, const char* key, dai_input** out) {
     DAI_REQUIRE(out && map_name && key, "null argument");
     DAI_GUARD(dai_node_input_map_get, {
+        DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
         // Node keeps its InputMap refs protected, so map access is per node type.
         if(auto sync = std::dynamic_pointer_cast<dai::node::Sync>(n->ptr)) {
@@ -588,6 +605,7 @@ int dai_node_input_map_get(dai_node* n, const char* map_name, const char* key, d
 int dai_node_output_names(dai_node* n, char** out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_node_output_names, {
+        DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
         std::string joined;
         for(dai::Node::Output* o : n->ptr->getOutputRefs()) {
@@ -601,6 +619,7 @@ int dai_node_output_names(dai_node* n, char** out) {
 int dai_node_input_names(dai_node* n, char** out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_node_input_names, {
+        DAI_LOCK_GRAPH;
         DAI_REQUIRE(n && n->ptr, "null node handle");
         std::string joined;
         for(dai::Node::Input* i : n->ptr->getInputRefs()) {
@@ -614,6 +633,7 @@ int dai_node_input_names(dai_node* n, char** out) {
 int dai_output_name(dai_output* o, char** out) {
     DAI_REQUIRE(o && out, "null argument");
     DAI_GUARD(dai_output_name, {
+        DAI_LOCK_GRAPH;
         *out = dup_string(as_output(o)->getName());
         return DAI_OK;
     })
@@ -621,6 +641,7 @@ int dai_output_name(dai_output* o, char** out) {
 int dai_output_link(dai_output* o, dai_input* i) {
     DAI_REQUIRE(o && i, "null argument");
     DAI_GUARD(dai_output_link, {
+        DAI_LOCK_GRAPH;
         as_output(o)->link(*as_input(i));
         return DAI_OK;
     })
@@ -628,6 +649,7 @@ int dai_output_link(dai_output* o, dai_input* i) {
 int dai_output_unlink(dai_output* o, dai_input* i) {
     DAI_REQUIRE(o && i, "null argument");
     DAI_GUARD(dai_output_unlink, {
+        DAI_LOCK_GRAPH;
         as_output(o)->unlink(*as_input(i));
         return DAI_OK;
     })
@@ -635,6 +657,7 @@ int dai_output_unlink(dai_output* o, dai_input* i) {
 int dai_output_create_queue(dai_output* o, uint32_t max_size, int blocking, dai_queue** out) {
     DAI_REQUIRE(o && out, "null argument");
     DAI_GUARD(dai_output_create_queue, {
+        DAI_LOCK_GRAPH;
         *out = new dai_queue{as_output(o)->createOutputQueue(max_size, blocking != 0)};
         return DAI_OK;
     })
@@ -642,6 +665,7 @@ int dai_output_create_queue(dai_output* o, uint32_t max_size, int blocking, dai_
 int dai_input_set_blocking(dai_input* i, int blocking) {
     DAI_REQUIRE(i, "null input");
     DAI_GUARD(dai_input_set_blocking, {
+        DAI_LOCK_GRAPH;
         as_input(i)->setBlocking(blocking != 0);
         return DAI_OK;
     })
@@ -649,6 +673,7 @@ int dai_input_set_blocking(dai_input* i, int blocking) {
 int dai_input_set_max_size(dai_input* i, uint32_t max_size) {
     DAI_REQUIRE(i, "null input");
     DAI_GUARD(dai_input_set_max_size, {
+        DAI_LOCK_GRAPH;
         as_input(i)->setMaxSize(max_size);
         return DAI_OK;
     })
@@ -659,6 +684,7 @@ int dai_input_set_max_size(dai_input* i, uint32_t max_size) {
 // ---------------------------------------------------------------------------
 int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t sensor_h, float sensor_fps) {
     DAI_GUARD(dai_camera_build, {
+        DAI_LOCK_GRAPH;
         auto c = node_as<dai::node::Camera>(cam, "Camera");
         SensorRes res;
         if(sensor_w > 0 && sensor_h > 0) res = std::make_pair((uint32_t)sensor_w, (uint32_t)sensor_h);
@@ -671,6 +697,7 @@ int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t se
 int dai_camera_board_socket(const dai_node* cam, int32_t* out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_camera_board_socket, {
+        DAI_LOCK_GRAPH;
         auto c = node_as<dai::node::Camera>(const_cast<dai_node*>(cam), "Camera");
         *out = (int32_t)c->getBoardSocket();
         return DAI_OK;
@@ -680,6 +707,7 @@ int dai_camera_request_output(dai_node* cam, uint32_t w, uint32_t h, int32_t typ
                               int32_t undistort, dai_output** out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_camera_request_output, {
+        DAI_LOCK_GRAPH;
         auto c = node_as<dai::node::Camera>(cam, "Camera");
         std::optional<dai::ImgFrame::Type> ty;
         if(type >= 0) ty = (dai::ImgFrame::Type)type;
@@ -697,6 +725,7 @@ int dai_camera_request_full_resolution_output(dai_node* cam, int32_t type, float
                                               dai_output** out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_camera_request_full_resolution_output, {
+        DAI_LOCK_GRAPH;
         auto c = node_as<dai::node::Camera>(cam, "Camera");
         std::optional<dai::ImgFrame::Type> ty;
         if(type >= 0) ty = (dai::ImgFrame::Type)type;
@@ -714,18 +743,21 @@ int dai_camera_request_full_resolution_output(dai_node* cam, int32_t type, float
 // ---------------------------------------------------------------------------
 int dai_sync_set_sync_threshold_ns(dai_node* s, int64_t ns) {
     DAI_GUARD(dai_sync_set_sync_threshold_ns, {
+        DAI_LOCK_GRAPH;
         node_as<dai::node::Sync>(s, "Sync")->setSyncThreshold(std::chrono::nanoseconds(ns));
         return DAI_OK;
     })
 }
 int dai_sync_set_sync_attempts(dai_node* s, int32_t attempts) {
     DAI_GUARD(dai_sync_set_sync_attempts, {
+        DAI_LOCK_GRAPH;
         node_as<dai::node::Sync>(s, "Sync")->setSyncAttempts((int)attempts);
         return DAI_OK;
     })
 }
 int dai_sync_set_run_on_host(dai_node* s, int run_on_host) {
     DAI_GUARD(dai_sync_set_run_on_host, {
+        DAI_LOCK_GRAPH;
         node_as<dai::node::Sync>(s, "Sync")->setRunOnHost(run_on_host != 0);
         return DAI_OK;
     })
@@ -736,6 +768,7 @@ int dai_sync_set_run_on_host(dai_node* s, int run_on_host) {
 // ---------------------------------------------------------------------------
 #define DAI_STEREO(fn, expr)                                            \
     DAI_GUARD(fn, {                                                     \
+        DAI_LOCK_GRAPH;                                                 \
         auto sd = node_as<dai::node::StereoDepth>(s, "StereoDepth");    \
         expr;                                                           \
         return DAI_OK;                                                  \
@@ -785,6 +818,7 @@ int dai_stereo_depth_pp_set_decimation_factor(dai_node* s, uint32_t factor) {
 // ---------------------------------------------------------------------------
 #define DAI_VENC(fn, expr)                                                  \
     DAI_GUARD(fn, {                                                         \
+        DAI_LOCK_GRAPH;                                                     \
         auto ve = node_as<dai::node::VideoEncoder>(e, "VideoEncoder");      \
         expr;                                                               \
         return DAI_OK;                                                      \
@@ -822,18 +856,21 @@ int dai_video_encoder_set_lossless(dai_node* e, int lossless) {
 // ---------------------------------------------------------------------------
 int dai_imu_enable_sensor(dai_node* imu, int32_t sensor, uint32_t report_rate_hz) {
     DAI_GUARD(dai_imu_enable_sensor, {
+        DAI_LOCK_GRAPH;
         node_as<dai::node::IMU>(imu, "IMU")->enableIMUSensor((dai::IMUSensor)sensor, report_rate_hz);
         return DAI_OK;
     })
 }
 int dai_imu_set_batch_report_threshold(dai_node* imu, int32_t n) {
     DAI_GUARD(dai_imu_set_batch_report_threshold, {
+        DAI_LOCK_GRAPH;
         node_as<dai::node::IMU>(imu, "IMU")->setBatchReportThreshold(n);
         return DAI_OK;
     })
 }
 int dai_imu_set_max_batch_reports(dai_node* imu, int32_t n) {
     DAI_GUARD(dai_imu_set_max_batch_reports, {
+        DAI_LOCK_GRAPH;
         node_as<dai::node::IMU>(imu, "IMU")->setMaxBatchReports(n);
         return DAI_OK;
     })

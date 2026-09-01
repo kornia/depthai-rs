@@ -33,8 +33,11 @@ pub(crate) struct NodeInner {
     pipeline: Pipeline,
 }
 
-// SAFETY: a heap shared_ptr copy; node setters are host-side property writes
-// that depthai documents as pre-start configuration.
+// SAFETY: a heap shared_ptr copy (atomic control block). depthai-core's Node has
+// no internal locking, so every shim entry point that reads or mutates a node,
+// a port, or builds/starts the pipeline takes the shim's global
+// `g_graph_mutex` (DAI_LOCK_GRAPH in depthai_c.cpp). That lock is what makes
+// concurrent calls through this handle data-race free.
 unsafe impl Send for NodeInner {}
 unsafe impl std::marker::Sync for NodeInner {}
 

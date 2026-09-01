@@ -45,8 +45,10 @@
 //!
 //! Every handle is `Send + Sync`. Messages are immutable and refcounted, so
 //! they can be cloned, retained past the next poll, and shared across threads
-//! (zero-copy). Queues are internally synchronised. Build the graph from one
-//! thread before [`Pipeline::start`]; that is depthai's own contract.
+//! (zero-copy). Queues and devices are synchronised inside depthai-core; nodes
+//! and ports are not, so the C shim serialises every graph-configuration call
+//! (node creation, setters, linking, queue creation, build/start) behind one
+//! mutex. Configure the graph, then [`Pipeline::start`].
 //!
 //! # Building
 //!

@@ -29,9 +29,10 @@ impl<M: Message> Clone for Output<M> {
     }
 }
 
-// SAFETY: the raw pointer is owned by the node (kept alive by `node`); depthai's
-// link/createOutputQueue are guarded inside the library, and the documented
-// contract is "configure the graph before start()".
+// SAFETY: the raw pointer is owned by the node, which `node` keeps alive. Node
+// ports have no locking of their own in depthai-core; every shim call on a port
+// (name/link/unlink/create_queue) takes the shim's global graph mutex
+// (DAI_LOCK_GRAPH in depthai_c.cpp), so concurrent use is serialised there.
 unsafe impl<M: Message> Send for Output<M> {}
 unsafe impl<M: Message> Sync for Output<M> {}
 
@@ -110,7 +111,7 @@ pub struct Input {
     raw: NonNull<sys::dai_input>,
 }
 
-// SAFETY: as for Output.
+// SAFETY: as for Output — serialised by the shim's graph mutex.
 unsafe impl Send for Input {}
 unsafe impl Sync for Input {}
 
