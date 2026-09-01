@@ -8,7 +8,9 @@ use depthai_sys as sys;
 
 use crate::calibration::CalibrationHandler;
 use crate::enums::{CameraBoardSocket, DeviceState, Platform, UsbSpeed};
-use crate::error::{check, cstring, fixed_string, take_native_error, take_string, Result};
+use crate::error::{
+    check, cstring, fixed_string, out_bool, out_handle, out_string, out_val, Result,
+};
 
 pub(crate) struct DeviceInner {
     raw: NonNull<sys::dai_device>,
@@ -51,10 +53,8 @@ impl Device {
         let id_c = id.map(cstring).transpose()?;
         let id_ptr = id_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr());
         let speed = max_usb_speed.map_or(-1, |s| s.to_raw());
-        let mut raw: *mut sys::dai_device = std::ptr::null_mut();
-        // SAFETY: id_ptr is NULL or a live C string; `raw` is a valid out-param.
-        check(unsafe { sys::dai_device_open(id_ptr, speed, &mut raw) })?;
-        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        // SAFETY: id_ptr is NULL or a live C string.
+        let raw = out_handle(|out| unsafe { sys::dai_device_open(id_ptr, speed, out) })?;
         Ok(Device {
             inner: Arc::new(DeviceInner { raw }),
         })
@@ -67,13 +67,16 @@ impl Device {
     /// `dai::Device::getAllAvailableDevices()` — every OAK visible on USB and the
     /// network, with its state.
     pub fn all_available() -> Result<Vec<DeviceInfo>> {
+        // Fills `buf` and reports the total device count, which may exceed it.
+        let fill = |buf: &mut [sys::dai_device_info]| -> Result<usize> {
+            // SAFETY: buf has `len` valid entries.
+            out_val(|n| unsafe { sys::dai_device_all_available(buf.as_mut_ptr(), buf.len(), n) })
+        };
         let mut buf = vec![sys::dai_device_info::default(); 16];
-        let mut n: usize = 0;
-        // SAFETY: buf has `cap` valid entries; n is a valid out-param.
-        check(unsafe { sys::dai_device_all_available(buf.as_mut_ptr(), buf.len(), &mut n) })?;
+        let mut n = fill(&mut buf)?;
         if n > buf.len() {
             buf.resize(n, sys::dai_device_info::default());
-            check(unsafe { sys::dai_device_all_available(buf.as_mut_ptr(), buf.len(), &mut n) })?;
+            n = fill(&mut buf)?;
         }
         buf.truncate(n.min(buf.len()));
         Ok(buf.iter().map(DeviceInfo::from_raw).collect())
@@ -85,43 +88,36 @@ impl Device {
     }
 
     pub fn is_closed(&self) -> Result<bool> {
-        let mut v = 0;
-        check(unsafe { sys::dai_device_is_closed(self.raw(), &mut v) })?;
-        Ok(v != 0)
+        out_bool(|v| unsafe { sys::dai_device_is_closed(self.raw(), v) })
     }
 
     /// The device's MxId.
     pub fn id(&self) -> Result<String> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_device_id(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) })
+        out_string(|p| unsafe { sys::dai_device_id(self.raw(), p) })
     }
 
     /// The device's product name (e.g. `OAK-D-PRO`).
     pub fn name(&self) -> Result<String> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_device_name(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) })
+        out_string(|p| unsafe { sys::dai_device_name(self.raw(), p) })
     }
 
     pub fn usb_speed(&self) -> Result<UsbSpeed> {
-        let mut v = 0;
-        check(unsafe { sys::dai_device_usb_speed(self.raw(), &mut v) })?;
-        Ok(UsbSpeed::from_raw(v))
+        Ok(UsbSpeed::from_raw(out_val(|v| unsafe {
+            sys::dai_device_usb_speed(self.raw(), v)
+        })?))
     }
 
     pub fn platform(&self) -> Result<Platform> {
-        let mut v = 0;
-        check(unsafe { sys::dai_device_platform(self.raw(), &mut v) })?;
-        Ok(Platform::from_raw(v))
+        Ok(Platform::from_raw(out_val(|v| unsafe {
+            sys::dai_device_platform(self.raw(), v)
+        })?))
     }
 
     /// Which camera sockets are populated on this board.
     pub fn connected_cameras(&self) -> Result<Vec<CameraBoardSocket>> {
         let mut buf = [0i32; 16];
-        let mut n: usize = 0;
-        check(unsafe {
-            sys::dai_device_connected_cameras(self.raw(), buf.as_mut_ptr(), buf.len(), &mut n)
+        let n = out_val(|n| unsafe {
+            sys::dai_device_connected_cameras(self.raw(), buf.as_mut_ptr(), buf.len(), n)
         })?;
         Ok(buf[..n.min(buf.len())]
             .iter()
@@ -132,16 +128,12 @@ impl Device {
     /// `getConnectedIMU()`: the raw firmware string naming the IMU chip. Empty or
     /// `"NONE"` on a board without one — that interpretation is the caller's.
     pub fn connected_imu(&self) -> Result<String> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_device_connected_imu(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) })
+        out_string(|p| unsafe { sys::dai_device_connected_imu(self.raw(), p) })
     }
 
     /// Read the factory calibration from the EEPROM (one RPC; cache the result).
     pub fn read_calibration(&self) -> Result<CalibrationHandler> {
-        let mut raw: *mut sys::dai_calib = std::ptr::null_mut();
-        check(unsafe { sys::dai_device_read_calibration(self.raw(), &mut raw) })?;
-        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        let raw = out_handle(|out| unsafe { sys::dai_device_read_calibration(self.raw(), out) })?;
         // SAFETY: freshly created by the shim, owned by us from here on.
         Ok(unsafe { CalibrationHandler::from_raw(raw) })
     }
@@ -154,31 +146,27 @@ impl Device {
         intensity: f32,
         mask: Option<i32>,
     ) -> Result<bool> {
-        let mut ok = 0;
-        check(unsafe {
+        out_bool(|ok| unsafe {
             sys::dai_device_set_ir_laser_dot_projector_intensity(
                 self.raw(),
                 intensity,
                 mask.unwrap_or(-1),
-                &mut ok,
+                ok,
             )
-        })?;
-        Ok(ok != 0)
+        })
     }
 
     /// Set the IR flood-light intensity in `0.0..=1.0`. See
     /// [`set_ir_laser_dot_projector_intensity`](Self::set_ir_laser_dot_projector_intensity).
     pub fn set_ir_flood_light_intensity(&self, intensity: f32, mask: Option<i32>) -> Result<bool> {
-        let mut ok = 0;
-        check(unsafe {
+        out_bool(|ok| unsafe {
             sys::dai_device_set_ir_flood_light_intensity(
                 self.raw(),
                 intensity,
                 mask.unwrap_or(-1),
-                &mut ok,
+                ok,
             )
-        })?;
-        Ok(ok != 0)
+        })
     }
 }
 
@@ -233,8 +221,7 @@ fn copy_fixed(dst: &mut [u8], s: &str) {
 /// (`SystemTime::now()` sampled at the same instant), which this crate
 /// deliberately does not do for you.
 pub fn steady_now() -> Result<Duration> {
-    let mut ns: i64 = 0;
-    check(unsafe { sys::dai_steady_clock_now_ns(&mut ns) })?;
+    let ns = out_val(|ns| unsafe { sys::dai_steady_clock_now_ns(ns) })?;
     Ok(Duration::from_nanos(ns.max(0) as u64))
 }
 

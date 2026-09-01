@@ -51,20 +51,17 @@ fn main() -> depthai::Result<()> {
     let right = pipeline.create::<Camera>()?;
     right.build(CameraBoardSocket::CamC)?;
     // Raw (undistort = false): a host rectifier wants untouched pixels.
-    let lo = left.request_output(
-        (w, h),
-        Some(ImgFrameType::Gray8),
-        ImgResizeMode::Crop,
-        Some(fps),
-        Some(false),
-    )?;
-    let ro = right.request_output(
-        (w, h),
-        Some(ImgFrameType::Gray8),
-        ImgResizeMode::Crop,
-        Some(fps),
-        Some(false),
-    )?;
+    let gray_output = |cam: &Camera| {
+        cam.request_output(
+            (w, h),
+            Some(ImgFrameType::Gray8),
+            ImgResizeMode::Crop,
+            Some(fps),
+            Some(false),
+        )
+    };
+    let lo = gray_output(&left)?;
+    let ro = gray_output(&right)?;
 
     let sync = pipeline.create::<Sync>()?;
     sync.set_sync_threshold(Duration::from_nanos((1_000_000_000.0 / fps / 2.0) as u64))?;

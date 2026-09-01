@@ -1,11 +1,9 @@
 //! [`Camera`]: `dai::node::Camera`, the v3 unified camera node.
 
-use std::ptr::NonNull;
-
 use depthai_sys as sys;
 
 use crate::enums::{CameraBoardSocket, ImgFrameType, ImgResizeMode};
-use crate::error::{check, take_native_error, Result};
+use crate::error::{check, out_handle, out_val, Result};
 use crate::message::ImgFrame;
 use crate::node::{node_type, NodeHandle};
 use crate::port::Output;
@@ -45,9 +43,9 @@ impl Camera {
     }
 
     pub fn board_socket(&self) -> Result<CameraBoardSocket> {
-        let mut v = 0;
-        check(unsafe { sys::dai_camera_board_socket(self.0.raw(), &mut v) })?;
-        Ok(CameraBoardSocket::from_raw(v))
+        Ok(CameraBoardSocket::from_raw(out_val(|v| unsafe {
+            sys::dai_camera_board_socket(self.0.raw(), v)
+        })?))
     }
 
     /// `requestOutput(size, type, resizeMode, fps, enableUndistortion)`: a new
@@ -64,8 +62,7 @@ impl Camera {
         fps: Option<f32>,
         undistort: Option<bool>,
     ) -> Result<Output<ImgFrame>> {
-        let mut out: *mut sys::dai_output = std::ptr::null_mut();
-        check(unsafe {
+        let raw = out_handle(|out| unsafe {
             sys::dai_camera_request_output(
                 self.0.raw(),
                 size.0,
@@ -74,10 +71,9 @@ impl Camera {
                 resize_mode.to_raw(),
                 fps.unwrap_or(-1.0),
                 undistort.map_or(-1, |u| u as i32),
-                &mut out,
+                out,
             )
         })?;
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
         // SAFETY: the port is owned by this node.
         Ok(unsafe { Output::from_raw(self.0.clone(), raw) })
     }
@@ -89,17 +85,16 @@ impl Camera {
         fps: Option<f32>,
         use_highest_resolution: bool,
     ) -> Result<Output<ImgFrame>> {
-        let mut out: *mut sys::dai_output = std::ptr::null_mut();
-        check(unsafe {
+        let raw = out_handle(|out| unsafe {
             sys::dai_camera_request_full_resolution_output(
                 self.0.raw(),
                 img_type.map_or(-1, |t| t.to_raw()),
                 fps.unwrap_or(-1.0),
                 use_highest_resolution as i32,
-                &mut out,
+                out,
             )
         })?;
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
+        // SAFETY: the port is owned by this node.
         Ok(unsafe { Output::from_raw(self.0.clone(), raw) })
     }
 }

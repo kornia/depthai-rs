@@ -6,7 +6,7 @@ use std::ptr::NonNull;
 use depthai_sys as sys;
 
 use crate::device::DeviceInfo;
-use crate::error::{check, take_native_error, Result};
+use crate::error::{out_handle, Result};
 
 /// `dai::DeviceBootloader`. Constructing one connects to a device that is in the
 /// bootloader; **dropping it reboots that device** back to an unbooted state so a
@@ -29,9 +29,7 @@ impl DeviceBootloader {
     /// Connect to the bootloader of `info` (from [`Device::all_available`](crate::Device::all_available)).
     pub fn open(info: &DeviceInfo) -> Result<DeviceBootloader> {
         let raw_info = info.to_raw();
-        let mut raw: *mut sys::dai_bootloader = std::ptr::null_mut();
-        check(unsafe { sys::dai_bootloader_open(&raw_info, &mut raw) })?;
-        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        let raw = out_handle(|out| unsafe { sys::dai_bootloader_open(&raw_info, out) })?;
         Ok(DeviceBootloader { raw })
     }
 }

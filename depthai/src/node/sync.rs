@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use depthai_sys as sys;
 
-use crate::error::{check, Result};
+use crate::error::{check, cstring, out_handle, Result};
 use crate::message::MessageGroup;
 use crate::node::{node_type, NodeHandle};
 use crate::port::{Input, Output};
@@ -22,11 +22,10 @@ impl Sync {
     /// (the Sync never emits) rather than an error; check
     /// [`input_names`](crate::node::Node::input_names) when debugging.
     pub fn input(&self, name: &str) -> Result<Input> {
-        let c = crate::error::cstring(name)?;
-        let mut out: *mut depthai_sys::dai_input = std::ptr::null_mut();
-        check(unsafe { sys::dai_sync_input(self.0.raw(), c.as_ptr(), &mut out) })?;
+        let c = cstring(name)?;
+        let raw = out_handle(|out| unsafe { sys::dai_sync_input(self.0.raw(), c.as_ptr(), out) })?;
         // SAFETY: the port belongs to this Sync node.
-        unsafe { self.0.wrap_input(out) }
+        Ok(unsafe { Input::from_raw(self.0.clone(), raw) })
     }
 
     /// The grouped output.

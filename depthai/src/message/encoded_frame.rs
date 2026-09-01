@@ -53,9 +53,7 @@ impl Message for EncodedFrame {
         let mut raw = sys::dai_encoded_frame_info::default();
         // SAFETY: `msg` is a live EncodedFrame handle; out-params are valid.
         check(unsafe { sys::dai_encoded_frame_get_info(msg.raw(), &mut raw) })?;
-        let mut p: *const u8 = std::ptr::null();
-        let mut len: usize = 0;
-        check(unsafe { sys::dai_msg_data(msg.raw(), &mut p, &mut len) })?;
+        let (data, data_len) = msg.data_raw()?;
         let info = EncodedFrameInfo {
             width: raw.width,
             height: raw.height,
@@ -67,9 +65,9 @@ impl Message for EncodedFrame {
             instance_num: raw.instance_num,
             sequence_num: raw.sequence_num,
             timestamp_ns: raw.timestamp_ns,
-            data_len: len,
+            data_len,
         };
-        Ok(EncodedFrame { msg, info, data: p })
+        Ok(EncodedFrame { msg, info, data })
     }
 
     fn as_msg(&self) -> &Msg {

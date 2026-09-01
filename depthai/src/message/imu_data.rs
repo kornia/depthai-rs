@@ -5,7 +5,7 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::{Datatype, ImuAccuracy};
-use crate::error::{check, Result};
+use crate::error::{out_val, Result};
 use crate::message::{Message, Msg, Sealed};
 
 /// A raw `dai::Timestamp { sec, nsec }` on the host `steady_clock`.
@@ -157,21 +157,23 @@ impl Message for ImuData {
 impl ImuData {
     /// Copy the packets out, appending to `out`; returns how many were appended.
     pub fn packets_into(&self, out: &mut Vec<ImuPacket>) -> Result<usize> {
+        // Fills `buf` and reports the batch's packet count, which may exceed it.
+        let fill = |buf: &mut [sys::dai_imu_packet]| -> Result<usize> {
+            // SAFETY: `buf` has `len` valid entries.
+            out_val(|n| unsafe {
+                sys::dai_imu_data_packets(self.msg.raw(), buf.as_mut_ptr(), buf.len(), n)
+            })
+        };
         let mut buf = [sys::dai_imu_packet::default(); 16];
-        let mut n: usize = 0;
-        check(unsafe {
-            sys::dai_imu_data_packets(self.msg.raw(), buf.as_mut_ptr(), buf.len(), &mut n)
-        })?;
-        if n > buf.len() {
-            let mut big = vec![sys::dai_imu_packet::default(); n];
-            check(unsafe {
-                sys::dai_imu_data_packets(self.msg.raw(), big.as_mut_ptr(), big.len(), &mut n)
-            })?;
-            let take = n.min(big.len());
-            out.extend(big[..take].iter().map(ImuPacket::from_raw));
-            return Ok(take);
+        let n = fill(&mut buf)?;
+        if n <= buf.len() {
+            out.extend(buf[..n].iter().map(ImuPacket::from_raw));
+            return Ok(n);
         }
-        out.extend(buf[..n].iter().map(ImuPacket::from_raw));
+        // Too big for the stack buffer: ask again with an exact-sized one.
+        let mut big = vec![sys::dai_imu_packet::default(); n];
+        let n = fill(&mut big)?.min(big.len());
+        out.extend(big[..n].iter().map(ImuPacket::from_raw));
         Ok(n)
     }
 

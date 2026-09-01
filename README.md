@@ -53,25 +53,47 @@ zero-copy, and a clone stays valid across later polls and threads
 `include/depthai`, `lib/libdepthai-core.so`). depthai-core is not packaged for
 Ubuntu/Debian; Luxonis ships only pip wheels and source. The ROS apt repos carry
 `ros-kilted-depthai` (3.9.0, Ubuntu 24.04 only) — `ros-humble-depthai` on 22.04
-is v2 and unusable here.
+is v2 and unusable here. So: build it once from the pinned submodule.
+
+```bash
+git submodule update --init --recursive
+DEPTHAI_CMAKE_EXTRA="-D DEPTHAI_OPENCV_SUPPORT=OFF" bash depthai-sys/scripts/build_depthai.sh
+```
+
+- Needs cmake ≥ 3.20, ninja, a C++17 compiler and ~4 GB of free disk for the
+  vcpkg build trees (prune `depthai-sys/vendor/depthai-core/build/vcpkg/buildtrees`
+  if space is tight). 30–60 min on a Jetson Orin (`-j2`, RAM-capped).
+- `DEPTHAI_OPENCV_SUPPORT=OFF` skips the OpenCV/ffmpeg vcpkg build (hours) — this
+  ABI needs none of it. Upstream then leaves three `ImageFilters`/`Rectification`
+  symbols undefined inside `libdepthai-core.so`; `csrc/depthai_nocv_stub.cpp`
+  provides weak throwing definitions so it links. depthai-core itself is never
+  patched.
+- The script copies vcpkg's `libusb-1.0.so` into the prefix (depthai-core's
+  `DT_NEEDED` names the unversioned file), so the prefix is self-contained.
+- `pixi run depthai-build` does the same inside a conda env with cmake/ninja/
+  pkg-config, for machines without them.
 
 Resolution order in `build.rs`:
 
 1. `DEPTHAI_PREFIX=/path/to/prefix`
-2. a `vendor/depthai` directory found by walking up from the crate — what
-   `depthai-sys/scripts/build_depthai.sh` produces from the pinned
-   `depthai-sys/vendor/depthai-core` submodule:
-   ```bash
-   git submodule update --init --recursive
-   bash depthai-sys/scripts/build_depthai.sh     # 10-30 min, RAM-capped (-j2 under 16 GB)
-   ```
+2. a `vendor/depthai` directory found by walking up from the crate — what the
+   script above produces
 3. with `--features vendored`: the same build, done by `build.rs` into
    `~/.cache/kornia-depthai/<tag>/<target>` (`DEPTHAI_RS_CACHE_DIR`,
    `DEPTHAI_JOBS` to override).
 
-`libusb-1.0` is a runtime dependency of depthai-core; `build.rs` finds it via
-`pkg-config` (or `DEPTHAI_LIBUSB_DIR`). The absolute `rpath` of the prefix is
-baked into binaries.
+`build.rs` bakes an absolute `rpath` into **depthai-sys's own** targets only
+(cargo does not propagate link args). A crate that ships binaries adds two
+lines to its own `build.rs`, using the metadata depthai-sys exports (needs a
+direct dependency on `depthai-sys`):
+
+```rust
+if let Ok(rpath) = std::env::var("DEP_DEPTHAI_CORE_RPATH") {
+    for dir in rpath.split(':') { println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}"); }
+}
+```
+
+or set `LD_LIBRARY_PATH=<prefix>/lib` at run time.
 
 **Check-only builds** (CI, laptops without depthai-core):
 `DEPTHAI_SYS_SKIP_NATIVE=1 cargo test` links an error-only stub so

@@ -24,7 +24,7 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::Datatype;
-use crate::error::{check, take_native_error, DepthaiError, Result};
+use crate::error::{check, out_val, take_native_error, DepthaiError, Result};
 
 /// An owned reference to one depthai message (`std::shared_ptr<dai::ADatatype>`).
 pub struct Msg {
@@ -88,9 +88,7 @@ impl Msg {
     /// The payload bytes (`dai::Buffer::getData()`), valid while this handle or
     /// any clone of it lives.
     pub fn data(&self) -> Result<&[u8]> {
-        let mut p: *const u8 = std::ptr::null();
-        let mut len: usize = 0;
-        check(unsafe { sys::dai_msg_data(self.raw(), &mut p, &mut len) })?;
+        let (p, len) = self.data_raw()?;
         if p.is_null() || len == 0 {
             return Ok(&[]);
         }
@@ -99,25 +97,28 @@ impl Msg {
         Ok(unsafe { std::slice::from_raw_parts(p, len) })
     }
 
+    /// The payload as a raw `(pointer, len)` pair, for the typed messages that
+    /// cache it next to the handle that keeps it alive.
+    pub(crate) fn data_raw(&self) -> Result<(*const u8, usize)> {
+        let mut p: *const u8 = std::ptr::null();
+        let mut len: usize = 0;
+        check(unsafe { sys::dai_msg_data(self.raw(), &mut p, &mut len) })?;
+        Ok((p, len))
+    }
+
     /// `getTimestamp()`: host `steady_clock` time of capture, as nanoseconds since
     /// that clock's epoch. Compare with [`steady_now`](crate::steady_now).
     pub fn timestamp_ns(&self) -> Result<i64> {
-        let mut v = 0;
-        check(unsafe { sys::dai_msg_timestamp_ns(self.raw(), &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_msg_timestamp_ns(self.raw(), v) })
     }
 
     /// `getTimestampDevice()`: the device's own clock, ns since its boot.
     pub fn timestamp_device_ns(&self) -> Result<i64> {
-        let mut v = 0;
-        check(unsafe { sys::dai_msg_timestamp_device_ns(self.raw(), &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_msg_timestamp_device_ns(self.raw(), v) })
     }
 
     pub fn sequence_num(&self) -> Result<i64> {
-        let mut v = 0;
-        check(unsafe { sys::dai_msg_sequence_num(self.raw(), &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_msg_sequence_num(self.raw(), v) })
     }
 
     /// Downcast into a typed message, checking the datatype.

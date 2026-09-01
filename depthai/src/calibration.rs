@@ -11,7 +11,7 @@ use std::ptr::NonNull;
 use depthai_sys as sys;
 
 use crate::enums::{CameraBoardSocket, CameraModel, LengthUnit};
-use crate::error::{check, Result};
+use crate::error::{check, out_val, Result};
 
 /// A snapshot of the device calibration (`dai::CalibrationHandler`).
 pub struct CalibrationHandler {
@@ -68,23 +68,22 @@ impl CalibrationHandler {
     /// EEPROM carries (usually 14). Resolution-independent.
     pub fn distortion_coefficients(&self, socket: CameraBoardSocket) -> Result<Vec<f32>> {
         let mut buf = [0f32; 32];
-        let mut n: usize = 0;
-        check(unsafe {
+        let n = out_val(|n| unsafe {
             sys::dai_calib_distortion_coefficients(
                 self.raw(),
                 socket.to_raw(),
                 buf.as_mut_ptr(),
                 buf.len(),
-                &mut n,
+                n,
             )
         })?;
         Ok(buf[..n.min(buf.len())].to_vec())
     }
 
     pub fn distortion_model(&self, socket: CameraBoardSocket) -> Result<CameraModel> {
-        let mut v = 0;
-        check(unsafe { sys::dai_calib_distortion_model(self.raw(), socket.to_raw(), &mut v) })?;
-        Ok(CameraModel::from_raw(v))
+        Ok(CameraModel::from_raw(out_val(|v| unsafe {
+            sys::dai_calib_distortion_model(self.raw(), socket.to_raw(), v)
+        })?))
     }
 
     /// The 4x4 transform `X_dst = T · X_src` (row-major).
@@ -165,38 +164,34 @@ impl CalibrationHandler {
         use_spec_translation: bool,
         unit: LengthUnit,
     ) -> Result<f32> {
-        let mut v = 0f32;
-        check(unsafe {
+        out_val(|v| unsafe {
             sys::dai_calib_baseline_distance(
                 self.raw(),
                 cam1.to_raw(),
                 cam2.to_raw(),
                 use_spec_translation as i32,
                 unit.to_raw(),
-                &mut v,
+                v,
             )
-        })?;
-        Ok(v)
+        })
     }
 
     pub fn stereo_left_socket(&self) -> Result<CameraBoardSocket> {
-        let mut v = 0;
-        check(unsafe { sys::dai_calib_stereo_left_socket(self.raw(), &mut v) })?;
-        Ok(CameraBoardSocket::from_raw(v))
+        Ok(CameraBoardSocket::from_raw(out_val(|v| unsafe {
+            sys::dai_calib_stereo_left_socket(self.raw(), v)
+        })?))
     }
 
     pub fn stereo_right_socket(&self) -> Result<CameraBoardSocket> {
-        let mut v = 0;
-        check(unsafe { sys::dai_calib_stereo_right_socket(self.raw(), &mut v) })?;
-        Ok(CameraBoardSocket::from_raw(v))
+        Ok(CameraBoardSocket::from_raw(out_val(|v| unsafe {
+            sys::dai_calib_stereo_right_socket(self.raw(), v)
+        })?))
     }
 
     /// Horizontal field of view in degrees. `use_spec`: from the board spec rather
     /// than the calibration.
     pub fn fov(&self, socket: CameraBoardSocket, use_spec: bool) -> Result<f32> {
-        let mut v = 0f32;
-        check(unsafe { sys::dai_calib_fov(self.raw(), socket.to_raw(), use_spec as i32, &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_calib_fov(self.raw(), socket.to_raw(), use_spec as i32, v) })
     }
 }
 

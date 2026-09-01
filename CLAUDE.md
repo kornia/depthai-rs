@@ -39,8 +39,11 @@ DEPTHAI_HIT=1 cargo test -p depthai --test hit -- --ignored --test-threads=1   #
 ```
 
 No prefix on the machine? `DEPTHAI_SYS_SKIP_NATIVE=1 cargo test` links an
-error-only stub (check/clippy/unit tests only). The source build
-(`depthai-sys/scripts/build_depthai.sh`) needs several GB free for vcpkg.
+error-only stub (check/clippy/unit tests only). Source build:
+`DEPTHAI_CMAKE_EXTRA="-D DEPTHAI_OPENCV_SUPPORT=OFF" bash depthai-sys/scripts/build_depthai.sh`
+(~4 GB free for vcpkg build trees, 30-60 min at -j2). OpenCV OFF leaves three
+symbols undefined in libdepthai-core.so; `csrc/depthai_nocv_stub.cpp` supplies
+weak fallbacks — never patch depthai-core. Hardware tests: `DEPTHAI_HIT=1`.
 
 ## Consumers
 

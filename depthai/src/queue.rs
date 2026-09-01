@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use depthai_sys as sys;
 
-use crate::error::{check, check_poll, take_native_error, take_string, Result};
+use crate::error::{check, out_bool, out_string, out_val, poll_handle, take_native_error, Result};
 use crate::message::{Message, Msg};
 
 /// A host queue created from an [`Output`](crate::Output) with
@@ -56,8 +56,7 @@ impl<M: Message> OutputQueue<M> {
         self.raw.as_ptr()
     }
 
-    fn wrap(&self, out: *mut sys::dai_msg) -> Result<M> {
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
+    fn wrap(raw: NonNull<sys::dai_msg>) -> Result<M> {
         // SAFETY: a fresh owned handle from the shim.
         unsafe { Msg::from_raw(raw) }.into_typed()
     }
@@ -67,40 +66,35 @@ impl<M: Message> OutputQueue<M> {
     /// A message of the wrong type is consumed and reported as
     /// [`DepthaiError::UnexpectedDatatype`](crate::DepthaiError::UnexpectedDatatype).
     pub fn try_get(&self) -> Result<Option<M>> {
-        let mut out: *mut sys::dai_msg = std::ptr::null_mut();
-        if !check_poll(unsafe { sys::dai_queue_try_get(self.raw(), &mut out) })? {
-            return Ok(None);
+        match poll_handle(|out| unsafe { sys::dai_queue_try_get(self.raw(), out) })? {
+            Some(raw) => Self::wrap(raw).map(Some),
+            None => Ok(None),
         }
-        self.wrap(out).map(Some)
     }
 
     /// Block up to `timeout` for the next message. `Ok(None)` = timed out.
     pub fn get(&self, timeout: Duration) -> Result<Option<M>> {
         let ns = timeout.as_nanos().min(i64::MAX as u128) as i64;
-        let mut out: *mut sys::dai_msg = std::ptr::null_mut();
-        if !check_poll(unsafe { sys::dai_queue_get(self.raw(), ns, &mut out) })? {
-            return Ok(None);
+        match poll_handle(|out| unsafe { sys::dai_queue_get(self.raw(), ns, out) })? {
+            Some(raw) => Self::wrap(raw).map(Some),
+            None => Ok(None),
         }
-        self.wrap(out).map(Some)
     }
 
     /// Block until the next message (errors if the queue is closed).
     pub fn get_blocking(&self) -> Result<M> {
-        let mut out: *mut sys::dai_msg = std::ptr::null_mut();
-        check_poll(unsafe { sys::dai_queue_get(self.raw(), -1, &mut out) })?;
-        self.wrap(out)
+        // A negative timeout waits forever, so `None` can only mean a closed queue.
+        let raw = poll_handle(|out| unsafe { sys::dai_queue_get(self.raw(), -1, out) })?
+            .ok_or_else(take_native_error)?;
+        Self::wrap(raw)
     }
 
     pub fn has(&self) -> Result<bool> {
-        let mut v = 0;
-        check(unsafe { sys::dai_queue_has(self.raw(), &mut v) })?;
-        Ok(v != 0)
+        out_bool(|v| unsafe { sys::dai_queue_has(self.raw(), v) })
     }
 
     pub fn len(&self) -> Result<u32> {
-        let mut v = 0;
-        check(unsafe { sys::dai_queue_size(self.raw(), &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_queue_size(self.raw(), v) })
     }
 
     pub fn is_empty(&self) -> Result<bool> {
@@ -113,9 +107,7 @@ impl<M: Message> OutputQueue<M> {
     }
 
     pub fn is_closed(&self) -> Result<bool> {
-        let mut v = 0;
-        check(unsafe { sys::dai_queue_is_closed(self.raw(), &mut v) })?;
-        Ok(v != 0)
+        out_bool(|v| unsafe { sys::dai_queue_is_closed(self.raw(), v) })
     }
 
     pub fn set_blocking(&self, blocking: bool) -> Result<()> {
@@ -127,8 +119,6 @@ impl<M: Message> OutputQueue<M> {
     }
 
     pub fn name(&self) -> Result<String> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_queue_name(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) })
+        out_string(|p| unsafe { sys::dai_queue_name(self.raw(), p) })
     }
 }

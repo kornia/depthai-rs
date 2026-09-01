@@ -6,7 +6,7 @@ use std::sync::Arc;
 use depthai_sys as sys;
 
 use crate::device::Device;
-use crate::error::{check, take_native_error, Result};
+use crate::error::{check, out_bool, out_handle, Result};
 use crate::node::NodeType;
 
 pub(crate) struct PipelineInner {
@@ -45,9 +45,7 @@ impl std::fmt::Debug for Pipeline {
 impl Pipeline {
     /// A pipeline bound to `device` (`dai::Pipeline(std::shared_ptr<Device>)`).
     pub fn new(device: &Device) -> Result<Pipeline> {
-        let mut raw: *mut sys::dai_pipeline = std::ptr::null_mut();
-        check(unsafe { sys::dai_pipeline_new(device.raw(), &mut raw) })?;
-        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        let raw = out_handle(|out| unsafe { sys::dai_pipeline_new(device.raw(), out) })?;
         Ok(Pipeline {
             inner: Arc::new(PipelineInner {
                 raw,
@@ -59,9 +57,7 @@ impl Pipeline {
     /// A pipeline with no device (`dai::Pipeline(false)`): build and inspect a
     /// graph without hardware. Cannot start.
     pub fn host_only() -> Result<Pipeline> {
-        let mut raw: *mut sys::dai_pipeline = std::ptr::null_mut();
-        check(unsafe { sys::dai_pipeline_new_host_only(&mut raw) })?;
-        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
+        let raw = out_handle(|out| unsafe { sys::dai_pipeline_new_host_only(out) })?;
         Ok(Pipeline {
             inner: Arc::new(PipelineInner { raw, device: None }),
         })
@@ -100,14 +96,10 @@ impl Pipeline {
     }
 
     pub fn is_running(&self) -> Result<bool> {
-        let mut v = 0;
-        check(unsafe { sys::dai_pipeline_is_running(self.raw(), &mut v) })?;
-        Ok(v != 0)
+        out_bool(|v| unsafe { sys::dai_pipeline_is_running(self.raw(), v) })
     }
 
     pub fn is_built(&self) -> Result<bool> {
-        let mut v = 0;
-        check(unsafe { sys::dai_pipeline_is_built(self.raw(), &mut v) })?;
-        Ok(v != 0)
+        out_bool(|v| unsafe { sys::dai_pipeline_is_built(self.raw(), v) })
     }
 }

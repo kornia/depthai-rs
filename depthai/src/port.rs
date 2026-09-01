@@ -6,7 +6,7 @@ use std::ptr::NonNull;
 
 use depthai_sys as sys;
 
-use crate::error::{check, take_native_error, take_string, Result};
+use crate::error::{check, out_handle, out_string, Result};
 use crate::message::Message;
 use crate::node::NodeHandle;
 use crate::queue::OutputQueue;
@@ -61,9 +61,7 @@ impl<M: Message> Output<M> {
 
     /// The port's descriptor name (e.g. `"depth"`).
     pub fn name(&self) -> Result<String> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_output_name(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) })
+        out_string(|p| unsafe { sys::dai_output_name(self.raw(), p) })
     }
 
     /// Link this output into `input`. depthai rejects incompatible datatypes.
@@ -79,11 +77,9 @@ impl<M: Message> Output<M> {
     /// chooses whether a full queue stalls the producer (`true`) or drops the
     /// oldest message (`false`).
     pub fn create_output_queue(&self, max_size: u32, blocking: bool) -> Result<OutputQueue<M>> {
-        let mut out: *mut sys::dai_queue = std::ptr::null_mut();
-        check(unsafe {
-            sys::dai_output_create_queue(self.raw(), max_size, blocking as i32, &mut out)
+        let raw = out_handle(|out| unsafe {
+            sys::dai_output_create_queue(self.raw(), max_size, blocking as i32, out)
         })?;
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
         // SAFETY: fresh owned handle.
         Ok(unsafe { OutputQueue::from_raw(raw) })
     }

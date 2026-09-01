@@ -5,7 +5,7 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::{Datatype, ImgFrameType};
-use crate::error::{check, Result};
+use crate::error::{check, out_val, Result};
 use crate::message::{Message, Msg, Sealed};
 
 /// The metadata of an [`ImgFrame`], fetched in one call.
@@ -59,9 +59,7 @@ impl Message for ImgFrame {
         let mut raw = sys::dai_img_frame_info::default();
         // SAFETY: `msg` is a live ImgFrame handle; out-params are valid.
         check(unsafe { sys::dai_img_frame_get_info(msg.raw(), &mut raw) })?;
-        let mut p: *const u8 = std::ptr::null();
-        let mut len: usize = 0;
-        check(unsafe { sys::dai_msg_data(msg.raw(), &mut p, &mut len) })?;
+        let (data, data_len) = msg.data_raw()?;
         let info = ImgFrameInfo {
             width: raw.width,
             height: raw.height,
@@ -71,9 +69,9 @@ impl Message for ImgFrame {
             sequence_num: raw.sequence_num,
             timestamp_ns: raw.timestamp_ns,
             timestamp_device_ns: raw.timestamp_device_ns,
-            data_len: len,
+            data_len,
         };
-        Ok(ImgFrame { msg, info, data: p })
+        Ok(ImgFrame { msg, info, data })
     }
 
     fn as_msg(&self) -> &Msg {
@@ -138,16 +136,12 @@ impl ImgFrame {
 
     /// `getPlaneStride(plane)` for planar formats.
     pub fn plane_stride(&self, plane: i32) -> Result<u32> {
-        let mut v = 0;
-        check(unsafe { sys::dai_img_frame_plane_stride(self.msg.raw(), plane, &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_img_frame_plane_stride(self.msg.raw(), plane, v) })
     }
 
     /// `getPlaneHeight()` for planar formats.
     pub fn plane_height(&self) -> Result<u32> {
-        let mut v = 0;
-        check(unsafe { sys::dai_img_frame_plane_height(self.msg.raw(), &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_img_frame_plane_height(self.msg.raw(), v) })
     }
 
     /// The underlying untyped handle.

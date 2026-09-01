@@ -20,7 +20,8 @@ use std::sync::Arc;
 use depthai_sys as sys;
 
 use crate::error::{
-    check, check_poll, cstring, static_string, take_native_error, take_string, Result,
+    cstring, out_string, out_val, poll_handle, static_string, take_native_error, DepthaiError,
+    Result,
 };
 use crate::message::{AnyMessage, Message};
 use crate::pipeline::Pipeline;
@@ -81,9 +82,7 @@ impl NodeHandle {
 
     /// The node id assigned by the pipeline.
     pub fn id(&self) -> Result<i64> {
-        let mut v = 0;
-        check(unsafe { sys::dai_node_id(self.raw(), &mut v) })?;
-        Ok(v)
+        out_val(|v| unsafe { sys::dai_node_id(self.raw(), v) })
     }
 
     /// The C++ node type name (e.g. `"Camera"`).
@@ -98,22 +97,14 @@ impl NodeHandle {
 
     /// Every output as `"group/name"`.
     pub fn output_names(&self) -> Result<Vec<String>> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_node_output_names(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) }
-            .lines()
-            .map(str::to_owned)
-            .collect())
+        let names = out_string(|p| unsafe { sys::dai_node_output_names(self.raw(), p) })?;
+        Ok(names.lines().map(str::to_owned).collect())
     }
 
     /// Every input as `"group/name"`.
     pub fn input_names(&self) -> Result<Vec<String>> {
-        let mut p = std::ptr::null_mut();
-        check(unsafe { sys::dai_node_input_names(self.raw(), &mut p) })?;
-        Ok(unsafe { take_string(p) }
-            .lines()
-            .map(str::to_owned)
-            .collect())
+        let names = out_string(|p| unsafe { sys::dai_node_input_names(self.raw(), p) })?;
+        Ok(names.lines().map(str::to_owned).collect())
     }
 
     /// `Node::getOutputRef(name)` in the default group. `Ok(None)` when absent.
@@ -124,54 +115,35 @@ impl NodeHandle {
     /// `Node::getInputRef(name)` in the default group. `Ok(None)` when absent.
     pub fn input_by_name(&self, name: &str) -> Result<Option<Input>> {
         let c = cstring(name)?;
-        let mut out: *mut sys::dai_input = std::ptr::null_mut();
-        let empty = c"";
-        if !check_poll(unsafe {
-            sys::dai_node_input_ref(self.raw(), empty.as_ptr(), c.as_ptr(), &mut out)
-        })? {
-            return Ok(None);
-        }
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
-        Ok(Some(unsafe { Input::from_raw(self.clone(), raw) }))
-    }
-
-    /// Wrap a port pointer the shim handed out for this node.
-    pub(crate) unsafe fn wrap_input(&self, raw: *mut sys::dai_input) -> Result<Input> {
-        let raw = NonNull::new(raw).ok_or_else(take_native_error)?;
-        // SAFETY: caller obtained `raw` from a shim call on this node.
-        Ok(unsafe { Input::from_raw(self.clone(), raw) })
+        let found = poll_handle(|out| unsafe {
+            sys::dai_node_input_ref(self.raw(), c"".as_ptr(), c.as_ptr(), out)
+        })?;
+        // SAFETY: the shim handed out a port owned by this node.
+        Ok(found.map(|raw| unsafe { Input::from_raw(self.clone(), raw) }))
     }
 
     pub(crate) fn output_typed<M: Message>(&self, name: &str) -> Result<Option<Output<M>>> {
         let c = cstring(name)?;
-        let mut out: *mut sys::dai_output = std::ptr::null_mut();
-        let empty = c"";
-        if !check_poll(unsafe {
-            sys::dai_node_output_ref(self.raw(), empty.as_ptr(), c.as_ptr(), &mut out)
-        })? {
-            return Ok(None);
-        }
-        let raw = NonNull::new(out).ok_or_else(take_native_error)?;
-        Ok(Some(unsafe { Output::from_raw(self.clone(), raw) }))
+        let found = poll_handle(|out| unsafe {
+            sys::dai_node_output_ref(self.raw(), c"".as_ptr(), c.as_ptr(), out)
+        })?;
+        // SAFETY: the shim handed out a port owned by this node.
+        Ok(found.map(|raw| unsafe { Output::from_raw(self.clone(), raw) }))
     }
 
     /// A fixed port that the node type guarantees exists.
     pub(crate) fn output_required<M: Message>(&self, name: &str) -> Result<Output<M>> {
-        self.output_typed(name)?.ok_or_else(|| {
-            crate::DepthaiError::Malformed(format!(
-                "{} has no output named {name:?}",
-                self.type_name()
-            ))
-        })
+        self.output_typed(name)?
+            .ok_or_else(|| self.missing_port("output", name))
     }
 
     pub(crate) fn input_required(&self, name: &str) -> Result<Input> {
-        self.input_by_name(name)?.ok_or_else(|| {
-            crate::DepthaiError::Malformed(format!(
-                "{} has no input named {name:?}",
-                self.type_name()
-            ))
-        })
+        self.input_by_name(name)?
+            .ok_or_else(|| self.missing_port("input", name))
+    }
+
+    fn missing_port(&self, kind: &str, name: &str) -> DepthaiError {
+        DepthaiError::Malformed(format!("{} has no {kind} named {name:?}", self.type_name()))
     }
 }
 
@@ -218,10 +190,9 @@ macro_rules! node_type {
         }
         impl crate::node::NodeType for $name {
             fn create(pipeline: &crate::pipeline::Pipeline) -> crate::error::Result<Self> {
-                let mut raw: *mut depthai_sys::dai_node = std::ptr::null_mut();
-                crate::error::check(unsafe { depthai_sys::$create(pipeline.raw(), &mut raw) })?;
-                let raw =
-                    std::ptr::NonNull::new(raw).ok_or_else(crate::error::take_native_error)?;
+                let raw = crate::error::out_handle(|out| unsafe {
+                    depthai_sys::$create(pipeline.raw(), out)
+                })?;
                 // SAFETY: fresh owned handle from the shim.
                 Ok($name(unsafe {
                     crate::node::NodeHandle::from_raw(raw, pipeline.clone())

@@ -2,6 +2,7 @@
 
 use std::ffi::{c_char, CStr, CString};
 use std::os::raw::c_int;
+use std::ptr::NonNull;
 
 use depthai_sys as sys;
 
@@ -54,7 +55,7 @@ pub(crate) fn check(rc: c_int) -> Result<()> {
     }
 }
 
-/// Map a 1 / 0 / -1 poll-style return code to `Some(())` / `None` / `Err`.
+/// Map a 1 / 0 / -1 poll-style return code to `true` / `false` / `Err`.
 #[inline]
 pub(crate) fn check_poll(rc: c_int) -> Result<bool> {
     match rc {
@@ -64,18 +65,54 @@ pub(crate) fn check_poll(rc: c_int) -> Result<bool> {
     }
 }
 
-/// Take ownership of a `char*` the shim allocated and free it.
-///
-/// # Safety
-/// `p` must come from a `char**` out-parameter of a successful shim call.
-pub(crate) unsafe fn take_string(p: *mut c_char) -> String {
+/// Run a shim getter that returns its value through an out-parameter:
+/// `out_val(|v| unsafe { sys::dai_queue_size(q, v) })?`. The FFI call stays
+/// visible at the call site; only the temporary and the [`check`] move here.
+#[inline]
+pub(crate) fn out_val<T: Default>(call: impl FnOnce(&mut T) -> c_int) -> Result<T> {
+    let mut v = T::default();
+    check(call(&mut v))?;
+    Ok(v)
+}
+
+/// [`out_val`] for the shim's `int`-as-bool out-parameters.
+#[inline]
+pub(crate) fn out_bool(call: impl FnOnce(&mut i32) -> c_int) -> Result<bool> {
+    Ok(out_val(call)? != 0)
+}
+
+/// [`out_val`] for `char**` out-parameters: takes ownership of the string the
+/// shim allocated and frees it.
+pub(crate) fn out_string(call: impl FnOnce(&mut *mut c_char) -> c_int) -> Result<String> {
+    let mut p: *mut c_char = std::ptr::null_mut();
+    check(call(&mut p))?;
     if p.is_null() {
-        return String::new();
+        return Ok(String::new());
     }
-    // SAFETY: caller guarantees `p` is a live NUL-terminated string we own.
+    // SAFETY: on success the shim wrote a live NUL-terminated string that we own.
     let s = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
     unsafe { sys::dai_string_free(p) };
-    s
+    Ok(s)
+}
+
+/// [`out_val`] for handle out-parameters. A call that succeeded but left the
+/// handle NULL is reported as the shim's last error.
+pub(crate) fn out_handle<T>(call: impl FnOnce(&mut *mut T) -> c_int) -> Result<NonNull<T>> {
+    let mut raw: *mut T = std::ptr::null_mut();
+    check(call(&mut raw))?;
+    NonNull::new(raw).ok_or_else(take_native_error)
+}
+
+/// [`out_handle`] for poll-style calls: `Ok(None)` when the shim reports that
+/// there is nothing to hand out.
+pub(crate) fn poll_handle<T>(
+    call: impl FnOnce(&mut *mut T) -> c_int,
+) -> Result<Option<NonNull<T>>> {
+    let mut raw: *mut T = std::ptr::null_mut();
+    if !check_poll(call(&mut raw))? {
+        return Ok(None);
+    }
+    NonNull::new(raw).ok_or_else(take_native_error).map(Some)
 }
 
 /// Read a static (non-owned) C string.

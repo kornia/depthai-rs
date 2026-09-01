@@ -61,24 +61,18 @@ fn stereo_sync_delivers_synced_pairs() {
     left.build(CameraBoardSocket::CamB).unwrap();
     let right = pipeline.create::<Camera>().unwrap();
     right.build(CameraBoardSocket::CamC).unwrap();
-    let lo = left
-        .request_output(
+    let gray_output = |cam: &Camera| {
+        cam.request_output(
             (640, 400),
             Some(ImgFrameType::Gray8),
             ImgResizeMode::Crop,
             Some(30.0),
             Some(false),
         )
-        .unwrap();
-    let ro = right
-        .request_output(
-            (640, 400),
-            Some(ImgFrameType::Gray8),
-            ImgResizeMode::Crop,
-            Some(30.0),
-            Some(false),
-        )
-        .unwrap();
+        .unwrap()
+    };
+    let lo = gray_output(&left);
+    let ro = gray_output(&right);
     let sync = pipeline.create::<Sync>().unwrap();
     sync.set_sync_threshold(Duration::from_millis(16)).unwrap();
     lo.link(&sync.input("left").unwrap()).unwrap();
