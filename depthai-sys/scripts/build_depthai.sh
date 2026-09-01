@@ -37,6 +37,8 @@ if [ ! -e "$SRC/CMakeLists.txt" ]; then
     git -C "$ROOT" submodule update --init --recursive vendor/depthai-core
 fi
 
+# OpenCV: pass DEPTHAI_CMAKE_EXTRA="-D DEPTHAI_OPENCV_SUPPORT=OFF" to skip the vcpkg
+# OpenCV/ffmpeg build (hours on a Jetson); the shim needs none of it.
 # NO patches are applied here: this repo builds depthai-core AS PINNED. A configuration
 # that needs source changes (e.g. DEPTHAI_OPENCV_SUPPORT=OFF, which does not link upstream
 # as of v3.7.1) is the CALLER's choice, so the caller owns the fixes and applies them to

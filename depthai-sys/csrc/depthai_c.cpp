@@ -8,10 +8,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "depthai/build/version.hpp"
@@ -130,6 +133,7 @@ struct dai_pipeline {
     std::shared_ptr<dai::Device> device;  // keeps the device alive as long as the pipeline
     std::unique_ptr<dai::Pipeline> ptr;
 };
+using SensorRes = std::optional<std::pair<uint32_t, uint32_t>>;
 struct dai_node {
     std::shared_ptr<dai::Node> ptr;
 };
@@ -163,6 +167,10 @@ static dai_input* from_input(dai::Node::Input* i) {
 // ---------------------------------------------------------------------------
 // Error plumbing
 // ---------------------------------------------------------------------------
+// NOTE for DAI_GUARD bodies: braces and angle brackets do NOT protect macro
+// arguments from comma splitting — only parentheses do. Keep top-level commas
+// (aggregate init `{a, b}`, `std::pair<A, B>`) out of guarded bodies: use a
+// type alias or build the object in separate statements.
 static thread_local std::string g_err;
 
 static void set_err(const std::string& m) {
@@ -435,14 +443,19 @@ int dai_pipeline_new(dai_device* device, dai_pipeline** out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_pipeline_new, {
         auto dev = device_of(device);
-        *out = new dai_pipeline{dev, std::make_unique<dai::Pipeline>(dev)};
+        auto* pl = new dai_pipeline;
+        pl->device = dev;
+        pl->ptr = std::make_unique<dai::Pipeline>(dev);
+        *out = pl;
         return DAI_OK;
     })
 }
 int dai_pipeline_new_host_only(dai_pipeline** out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_pipeline_new_host_only, {
-        *out = new dai_pipeline{nullptr, std::make_unique<dai::Pipeline>(false)};
+        auto* pl = new dai_pipeline;
+        pl->ptr = std::make_unique<dai::Pipeline>(false);
+        *out = pl;
         return DAI_OK;
     })
 }
@@ -647,7 +660,7 @@ int dai_input_set_max_size(dai_input* i, uint32_t max_size) {
 int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t sensor_h, float sensor_fps) {
     DAI_GUARD(dai_camera_build, {
         auto c = node_as<dai::node::Camera>(cam, "Camera");
-        std::optional<std::pair<uint32_t, uint32_t>> res;
+        SensorRes res;
         if(sensor_w > 0 && sensor_h > 0) res = std::make_pair((uint32_t)sensor_w, (uint32_t)sensor_h);
         std::optional<float> fps;
         if(sensor_fps > 0.0f) fps = sensor_fps;
