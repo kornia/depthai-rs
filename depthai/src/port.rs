@@ -13,20 +13,11 @@ use crate::queue::OutputQueue;
 
 /// A node output, typed by the message it emits. Holds a reference to its node,
 /// so it can never outlive the port it points at.
+#[derive(Clone, Debug)]
 pub struct Output<M: Message> {
     node: NodeHandle,
     raw: NonNull<sys::dai_output>,
     _m: PhantomData<fn() -> M>,
-}
-
-impl<M: Message> Clone for Output<M> {
-    fn clone(&self) -> Self {
-        Output {
-            node: self.node.clone(),
-            raw: self.raw,
-            _m: PhantomData,
-        }
-    }
 }
 
 // SAFETY: the raw pointer is owned by the node, which `node` keeps alive. Node
@@ -35,14 +26,6 @@ impl<M: Message> Clone for Output<M> {
 // (DAI_LOCK_GRAPH in depthai_c.cpp), so concurrent use is serialised there.
 unsafe impl<M: Message> Send for Output<M> {}
 unsafe impl<M: Message> Sync for Output<M> {}
-
-impl<M: Message> std::fmt::Debug for Output<M> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Output")
-            .field("name", &self.name().ok())
-            .finish()
-    }
-}
 
 impl<M: Message> Output<M> {
     /// # Safety
@@ -101,7 +84,7 @@ impl<M: Message> Output<M> {
 }
 
 /// A node input. Untyped: depthai checks datatype compatibility at link time.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Input {
     node: NodeHandle,
     raw: NonNull<sys::dai_input>,
@@ -110,12 +93,6 @@ pub struct Input {
 // SAFETY: as for Output — serialised by the shim's graph mutex.
 unsafe impl Send for Input {}
 unsafe impl Sync for Input {}
-
-impl std::fmt::Debug for Input {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Input")
-    }
-}
 
 impl Input {
     /// # Safety

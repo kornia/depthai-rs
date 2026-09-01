@@ -1,9 +1,10 @@
 //! Enumerations mirrored from depthai-core.
 //!
 //! Every enum carries an `Other(i32)` arm: values the device reports that this
-//! crate does not name are passed through instead of turned into an error, and
-//! you can pass raw depthai values the crate does not name yet. The numeric
-//! values are pinned against depthai-core by `static_assert`s in the C shim.
+//! crate does not name pass through instead of becoming errors, and raw
+//! depthai values the crate does not name yet can still be passed in. The
+//! numeric values are pinned against depthai-core by `static_assert`s in the C
+//! shim.
 
 use depthai_sys as sys;
 
@@ -31,23 +32,28 @@ macro_rules! dai_enum {
 
             /// From the depthai-core numeric value (never fails).
             pub const fn from_raw(v: i32) -> Self {
-                $( if v == sys::$konst { return Self::$variant; } )*
-                Self::Other(v)
+                match v {
+                    $( sys::$konst => Self::$variant, )*
+                    other => Self::Other(other),
+                }
             }
         }
+    };
+}
 
+/// The shim's "negative selects the C++ default" convention for optional enums.
+pub(crate) fn opt_raw<E: Into<i32>>(v: Option<E>) -> i32 {
+    v.map_or(-1, Into::into)
+}
+
+macro_rules! into_i32 {
+    ($($name:ident),*) => {$(
         impl From<$name> for i32 {
             fn from(v: $name) -> i32 {
                 v.to_raw()
             }
         }
-
-        impl From<i32> for $name {
-            fn from(v: i32) -> Self {
-                Self::from_raw(v)
-            }
-        }
-    };
+    )*};
 }
 
 dai_enum! {
@@ -212,6 +218,54 @@ dai_enum! {
 }
 
 dai_enum! {
+    /// `XLinkProtocol_t` — how an enumerated device is reachable.
+    XLinkProtocol {
+        UsbVsc = DAI_XLINK_PROTOCOL_USB_VSC,
+        UsbCdc = DAI_XLINK_PROTOCOL_USB_CDC,
+        Pcie = DAI_XLINK_PROTOCOL_PCIE,
+        Ipc = DAI_XLINK_PROTOCOL_IPC,
+        TcpIp = DAI_XLINK_PROTOCOL_TCP_IP,
+        LocalShdmem = DAI_XLINK_PROTOCOL_LOCAL_SHDMEM,
+        TcpIpOrLocalShdmem = DAI_XLINK_PROTOCOL_TCP_IP_OR_LOCAL_SHDMEM,
+        UsbEp = DAI_XLINK_PROTOCOL_USB_EP,
+        Any = DAI_XLINK_PROTOCOL_ANY,
+    }
+}
+
+dai_enum! {
+    /// `XLinkPlatform_t` — the silicon of an enumerated device.
+    XLinkPlatform {
+        Any = DAI_XLINK_PLATFORM_ANY,
+        Myriad2 = DAI_XLINK_PLATFORM_MYRIAD_2,
+        MyriadX = DAI_XLINK_PLATFORM_MYRIAD_X,
+        Rvc3 = DAI_XLINK_PLATFORM_RVC3,
+        Rvc4 = DAI_XLINK_PLATFORM_RVC4,
+    }
+}
+
+dai_enum! {
+    /// `dai::EncodedFrame::Profile`.
+    EncodedFrameProfile {
+        Jpeg = DAI_ENC_PROFILE_JPEG,
+        /// H.264.
+        Avc = DAI_ENC_PROFILE_AVC,
+        /// H.265.
+        Hevc = DAI_ENC_PROFILE_HEVC,
+    }
+}
+
+dai_enum! {
+    /// `dai::EncodedFrame::FrameType`.
+    EncodedFrameType {
+        /// Keyframe.
+        I = DAI_ENC_FRAME_I,
+        P = DAI_ENC_FRAME_P,
+        B = DAI_ENC_FRAME_B,
+        Unknown = DAI_ENC_FRAME_UNKNOWN,
+    }
+}
+
+dai_enum! {
     /// `dai::Platform`.
     Platform {
         Rvc2 = DAI_PLATFORM_RVC2,
@@ -219,6 +273,27 @@ dai_enum! {
         Rvc4 = DAI_PLATFORM_RVC4,
     }
 }
+
+into_i32!(
+    CameraBoardSocket,
+    UsbSpeed,
+    ImgResizeMode,
+    ImgFrameType,
+    Datatype,
+    CameraModel,
+    LengthUnit,
+    ImuSensor,
+    ImuAccuracy,
+    VideoEncoderProfile,
+    RateControlMode,
+    StereoPresetMode,
+    DeviceState,
+    XLinkProtocol,
+    XLinkPlatform,
+    EncodedFrameProfile,
+    EncodedFrameType,
+    Platform
+);
 
 #[cfg(test)]
 mod tests {
@@ -238,5 +313,9 @@ mod tests {
         assert_eq!(Datatype::from_raw(28), Datatype::MessageGroup);
         assert_eq!(ImuSensor::GyroscopeRaw.to_raw(), 0x15);
         assert_eq!(DeviceState::from_raw(3), DeviceState::Bootloader);
+        assert_eq!(XLinkPlatform::from_raw(2480), XLinkPlatform::MyriadX);
+        assert_eq!(EncodedFrameType::from_raw(0), EncodedFrameType::I);
+        assert_eq!(opt_raw::<UsbSpeed>(None), -1);
+        assert_eq!(opt_raw(Some(UsbSpeed::High)), 3);
     }
 }

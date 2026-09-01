@@ -7,11 +7,14 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::calibration::CalibrationHandler;
-use crate::enums::{CameraBoardSocket, DeviceState, Platform, UsbSpeed};
+use crate::enums::{
+    opt_raw, CameraBoardSocket, DeviceState, Platform, UsbSpeed, XLinkPlatform, XLinkProtocol,
+};
 use crate::error::{
-    check, cstring, fixed_string, out_bool, out_handle, out_string, out_val, Result,
+    check, cstring, fill_vec, fixed_string, out_bool, out_handle, out_string, out_val, Result,
 };
 
+#[derive(Debug)]
 pub(crate) struct DeviceInner {
     raw: NonNull<sys::dai_device>,
 }
@@ -32,15 +35,9 @@ impl Drop for DeviceInner {
 /// A connected OAK device. Cloning shares the same connection (like copying a
 /// `std::shared_ptr<dai::Device>` in C++); the connection closes when the last
 /// clone — and every [`Pipeline`](crate::Pipeline) built on it — is dropped.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Device {
     inner: Arc<DeviceInner>,
-}
-
-impl std::fmt::Debug for Device {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Device").finish_non_exhaustive()
-    }
 }
 
 impl Device {
@@ -52,9 +49,21 @@ impl Device {
     pub fn open(id: Option<&str>, max_usb_speed: Option<UsbSpeed>) -> Result<Device> {
         let id_c = id.map(cstring).transpose()?;
         let id_ptr = id_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr());
-        let speed = max_usb_speed.map_or(-1, |s| s.to_raw());
+        let speed = opt_raw(max_usb_speed);
         // SAFETY: id_ptr is NULL or a live C string.
         let raw = out_handle(|out| unsafe { sys::dai_device_open(id_ptr, speed, out) })?;
+        Ok(Device {
+            inner: Arc::new(DeviceInner { raw }),
+        })
+    }
+
+    /// `Device(const DeviceInfo&, UsbSpeed)`: connect to a device from
+    /// [`all_available`](Self::all_available) without re-enumerating.
+    pub fn open_info(info: &DeviceInfo, max_usb_speed: Option<UsbSpeed>) -> Result<Device> {
+        let raw_info = info.to_raw();
+        let raw = out_handle(|out| unsafe {
+            sys::dai_device_open_info(&raw_info, opt_raw(max_usb_speed), out)
+        })?;
         Ok(Device {
             inner: Arc::new(DeviceInner { raw }),
         })
@@ -67,19 +76,11 @@ impl Device {
     /// `dai::Device::getAllAvailableDevices()` — every OAK visible on USB and the
     /// network, with its state.
     pub fn all_available() -> Result<Vec<DeviceInfo>> {
-        // Fills `buf` and reports the total device count, which may exceed it.
-        let fill = |buf: &mut [sys::dai_device_info]| -> Result<usize> {
-            // SAFETY: buf has `len` valid entries.
+        let raw = fill_vec::<sys::dai_device_info>(16, |buf| {
+            // SAFETY: buf has `len` valid entries; the shim reports the total count.
             out_val(|n| unsafe { sys::dai_device_all_available(buf.as_mut_ptr(), buf.len(), n) })
-        };
-        let mut buf = vec![sys::dai_device_info::default(); 16];
-        let mut n = fill(&mut buf)?;
-        if n > buf.len() {
-            buf.resize(n, sys::dai_device_info::default());
-            n = fill(&mut buf)?;
-        }
-        buf.truncate(n.min(buf.len()));
-        Ok(buf.iter().map(DeviceInfo::from_raw).collect())
+        })?;
+        Ok(raw.iter().map(DeviceInfo::from_raw).collect())
     }
 
     /// Close the connection now (also happens when the last clone drops).
@@ -102,27 +103,21 @@ impl Device {
     }
 
     pub fn usb_speed(&self) -> Result<UsbSpeed> {
-        Ok(UsbSpeed::from_raw(out_val(|v| unsafe {
-            sys::dai_device_usb_speed(self.raw(), v)
-        })?))
+        out_val(|v| unsafe { sys::dai_device_usb_speed(self.raw(), v) }).map(UsbSpeed::from_raw)
     }
 
     pub fn platform(&self) -> Result<Platform> {
-        Ok(Platform::from_raw(out_val(|v| unsafe {
-            sys::dai_device_platform(self.raw(), v)
-        })?))
+        out_val(|v| unsafe { sys::dai_device_platform(self.raw(), v) }).map(Platform::from_raw)
     }
 
     /// Which camera sockets are populated on this board.
     pub fn connected_cameras(&self) -> Result<Vec<CameraBoardSocket>> {
-        let mut buf = [0i32; 16];
-        let n = out_val(|n| unsafe {
-            sys::dai_device_connected_cameras(self.raw(), buf.as_mut_ptr(), buf.len(), n)
+        let raw = fill_vec::<i32>(16, |buf| {
+            out_val(|n| unsafe {
+                sys::dai_device_connected_cameras(self.raw(), buf.as_mut_ptr(), buf.len(), n)
+            })
         })?;
-        Ok(buf[..n.min(buf.len())]
-            .iter()
-            .map(|&v| CameraBoardSocket::from_raw(v))
-            .collect())
+        Ok(raw.into_iter().map(CameraBoardSocket::from_raw).collect())
     }
 
     /// `getConnectedIMU()`: the raw firmware string naming the IMU chip. Empty or
@@ -178,11 +173,9 @@ pub struct DeviceInfo {
     /// MxId.
     pub device_id: String,
     pub state: DeviceState,
-    /// `XLinkProtocol_t`, raw.
-    pub protocol: i32,
-    /// `XLinkPlatform_t`, raw.
-    pub platform: i32,
-    /// `XLinkError_t`, raw.
+    pub protocol: XLinkProtocol,
+    pub platform: XLinkPlatform,
+    /// `XLinkError_t`, raw (0 = success).
     pub status: i32,
 }
 
@@ -192,8 +185,8 @@ impl DeviceInfo {
             name: fixed_string(&r.name),
             device_id: fixed_string(&r.device_id),
             state: DeviceState::from_raw(r.state),
-            protocol: r.protocol,
-            platform: r.platform,
+            protocol: XLinkProtocol::from_raw(r.protocol),
+            platform: XLinkPlatform::from_raw(r.platform),
             status: r.status,
         }
     }
@@ -203,8 +196,8 @@ impl DeviceInfo {
         copy_fixed(&mut r.name, &self.name);
         copy_fixed(&mut r.device_id, &self.device_id);
         r.state = self.state.to_raw();
-        r.protocol = self.protocol;
-        r.platform = self.platform;
+        r.protocol = self.protocol.to_raw();
+        r.platform = self.platform.to_raw();
         r.status = self.status;
         r
     }
@@ -240,8 +233,8 @@ mod tests {
             name: "192.168.1.42".into(),
             device_id: "18443010D1C3F00F00".into(),
             state: DeviceState::Bootloader,
-            protocol: 2,
-            platform: 1,
+            protocol: XLinkProtocol::TcpIp,
+            platform: XLinkPlatform::MyriadX,
             status: 0,
         };
         let raw = info.to_raw();
@@ -254,8 +247,8 @@ mod tests {
             name: "x".repeat(200),
             device_id: String::new(),
             state: DeviceState::Any,
-            protocol: 0,
-            platform: 0,
+            protocol: XLinkProtocol::Any,
+            platform: XLinkPlatform::Any,
             status: 0,
         };
         let back = DeviceInfo::from_raw(&info.to_raw());

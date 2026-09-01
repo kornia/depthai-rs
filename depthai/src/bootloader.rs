@@ -12,18 +12,13 @@ use crate::error::{out_handle, Result};
 /// bootloader; **dropping it reboots that device** back to an unbooted state so a
 /// normal [`Device::open`](crate::Device::open) succeeds again. That open+drop is
 /// the whole recovery for a PoE OAK stuck in `DeviceState::Bootloader`.
+#[derive(Debug)]
 pub struct DeviceBootloader {
     raw: NonNull<sys::dai_bootloader>,
 }
 
 // SAFETY: opaque handle used only through the shim; not Sync (single owner).
 unsafe impl Send for DeviceBootloader {}
-
-impl std::fmt::Debug for DeviceBootloader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("DeviceBootloader")
-    }
-}
 
 impl DeviceBootloader {
     /// Connect to the bootloader of `info` (from [`Device::all_available`](crate::Device::all_available)).

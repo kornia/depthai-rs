@@ -38,7 +38,7 @@ fn unknown_port_is_none_not_error() {
     let sync = p.create::<Sync>().unwrap();
     assert!(sync.output_by_name("nope").unwrap().is_none());
     assert!(sync.input_by_name("nope").unwrap().is_none());
-    assert_eq!(sync.type_name(), "Sync");
+    assert_eq!(sync.type_name().unwrap(), "Sync");
     assert!(sync
         .output_names()
         .unwrap()

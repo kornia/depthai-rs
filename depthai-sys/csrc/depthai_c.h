@@ -172,6 +172,39 @@ enum {
     DAI_XLINK_STATE_BOOTLOADER = 3,
     DAI_XLINK_STATE_FLASH_BOOTED = 4,
 };
+/* XLinkProtocol_t */
+enum {
+    DAI_XLINK_PROTOCOL_USB_VSC = 0,
+    DAI_XLINK_PROTOCOL_USB_CDC = 1,
+    DAI_XLINK_PROTOCOL_PCIE = 2,
+    DAI_XLINK_PROTOCOL_IPC = 3,
+    DAI_XLINK_PROTOCOL_TCP_IP = 4,
+    DAI_XLINK_PROTOCOL_LOCAL_SHDMEM = 5,
+    DAI_XLINK_PROTOCOL_TCP_IP_OR_LOCAL_SHDMEM = 6,
+    DAI_XLINK_PROTOCOL_USB_EP = 7,
+    DAI_XLINK_PROTOCOL_ANY = 9,
+};
+/* XLinkPlatform_t */
+enum {
+    DAI_XLINK_PLATFORM_ANY = 0,
+    DAI_XLINK_PLATFORM_MYRIAD_2 = 2450,
+    DAI_XLINK_PLATFORM_MYRIAD_X = 2480,
+    DAI_XLINK_PLATFORM_RVC3 = 3000,
+    DAI_XLINK_PLATFORM_RVC4 = 4000,
+};
+/* dai::EncodedFrame::Profile */
+enum {
+    DAI_ENC_PROFILE_JPEG = 0,
+    DAI_ENC_PROFILE_AVC = 1,
+    DAI_ENC_PROFILE_HEVC = 2,
+};
+/* dai::EncodedFrame::FrameType */
+enum {
+    DAI_ENC_FRAME_I = 0,
+    DAI_ENC_FRAME_P = 1,
+    DAI_ENC_FRAME_B = 2,
+    DAI_ENC_FRAME_UNKNOWN = 3,
+};
 /* dai::Platform */
 enum {
     DAI_PLATFORM_RVC2 = 0,
@@ -193,6 +226,18 @@ typedef struct dai_device_info {
     int32_t status;     /* XLinkError_t */
     int32_t reserved_[2];
 } dai_device_info; /* sizeof == 152 */
+
+/* The dai::ADatatype / dai::Buffer getters every message has, in one copy. The
+ * data pointer stays valid while any handle to the message lives. */
+typedef struct dai_buffer_info {
+    int32_t datatype; /* dai::DatatypeEnum */
+    uint32_t pad_;
+    int64_t timestamp_ns;        /* getTimestamp(): host steady_clock, ns since its epoch */
+    int64_t timestamp_device_ns; /* getTimestampDevice(): device clock, ns since boot */
+    int64_t sequence_num;
+    const uint8_t* data; /* getData().data() */
+    size_t data_len;     /* getData().size() */
+} dai_buffer_info; /* sizeof == 48 */
 
 /* Everything about a dai::ImgFrame except its pixels. */
 typedef struct dai_img_frame_info {
@@ -283,6 +328,9 @@ int dai_steady_clock_now_ns(int64_t* out);
 /* Connect. `name_or_id` NULL/"" = first available; else an MxId, IP or name.
  * `max_usb_speed` < 0 = library default. */
 int dai_device_open(const char* name_or_id, int32_t max_usb_speed, dai_device** out);
+/* Device(const DeviceInfo&, UsbSpeed): connect to an enumerated device.
+ * `max_usb_speed` < 0 = library default. */
+int dai_device_open_info(const dai_device_info* info, int32_t max_usb_speed, dai_device** out);
 /* Drop this reference. The last reference runs ~Device (which closes). */
 void dai_device_release(dai_device* d);
 int dai_device_close(dai_device* d);
@@ -438,6 +486,8 @@ void dai_msg_release(dai_msg* m);
 /* shared_ptr copy: refcount++. */
 int dai_msg_clone(const dai_msg* m, dai_msg** out);
 int dai_msg_datatype(const dai_msg* m, int32_t* out);
+/* All Buffer-level getters at once (see dai_buffer_info). */
+int dai_buffer_get_info(const dai_msg* m, dai_buffer_info* out);
 /* Buffer-level accessors (valid for every message type). The data pointer stays
  * valid while ANY handle to this message lives. */
 int dai_msg_data(const dai_msg* m, const uint8_t** ptr, size_t* len);

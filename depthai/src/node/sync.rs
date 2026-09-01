@@ -5,16 +5,17 @@ use std::time::Duration;
 
 use depthai_sys as sys;
 
-use crate::error::{check, cstring, out_handle, Result};
+use crate::error::{check, cstring, duration_to_ns, out_handle, Result};
 use crate::message::MessageGroup;
-use crate::node::{node_type, NodeHandle};
+use crate::node::node_type;
 use crate::port::{Input, Output};
 
-/// A `dai::node::Sync`. Link each stream into a named key of
-/// [`input`](Self::input); read groups from [`out`](Self::out).
-#[derive(Clone)]
-pub struct Sync(pub(crate) NodeHandle);
-node_type!(Sync, dai_pipeline_create_sync);
+node_type!(
+    /// A `dai::node::Sync`. Link each stream into a named key of
+    /// [`input`](Self::input); read groups from [`out`](Self::out).
+    Sync,
+    dai_pipeline_create_sync
+);
 
 impl Sync {
     /// The `inputs[name]` map entry — created on first use, like depthai's
@@ -35,8 +36,9 @@ impl Sync {
 
     /// Maximum timestamp spread inside one group.
     pub fn set_sync_threshold(&self, threshold: Duration) -> Result<()> {
-        let ns = threshold.as_nanos().min(i64::MAX as u128) as i64;
-        check(unsafe { sys::dai_sync_set_sync_threshold_ns(self.0.raw(), ns) })
+        check(unsafe {
+            sys::dai_sync_set_sync_threshold_ns(self.0.raw(), duration_to_ns(threshold))
+        })
     }
 
     /// How many attempts before a group is emitted unsynced (`-1` = infinite).

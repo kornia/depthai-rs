@@ -79,7 +79,9 @@ fn main() -> depthai::Result<()> {
     let (mut rgb, mut depth, mut video, mut video_bytes) = (0u32, 0u32, 0u32, 0usize);
     let mut depth_dims = (0, 0);
     while start.elapsed() < Duration::from_secs(5) {
-        while let Some(f) = rgb_q.try_get()? {
+        // Block on the colour stream (10 fps) and drain the others opportunistically:
+        // no busy-polling three queues.
+        if let Some(f) = rgb_q.get(Duration::from_millis(200))? {
             rgb += 1;
             debug_assert_eq!(f.data().len(), (f.width() * f.height() * 3) as usize);
         }
@@ -101,7 +103,6 @@ fn main() -> depthai::Result<()> {
             video += 1;
             video_bytes += v.data().len();
         }
-        std::thread::sleep(Duration::from_millis(5));
     }
     println!(
         "5 s: rgb={rgb} depth={depth} ({}x{}) video={video} ({} kB)",

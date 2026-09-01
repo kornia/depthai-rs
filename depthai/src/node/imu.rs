@@ -5,18 +5,19 @@ use depthai_sys as sys;
 use crate::enums::ImuSensor;
 use crate::error::{check, Result};
 use crate::message::ImuData;
-use crate::node::{node_type, NodeHandle};
+use crate::node::node_type;
 use crate::port::Output;
 
-/// A `dai::node::IMU`. Enable sensors, set batching, read
-/// [`ImuData`] batches from [`out`](Self::out).
-///
-/// Not every OAK carries an IMU: check
-/// [`Device::connected_imu`](crate::Device::connected_imu) before creating the
-/// node, because a missing IMU fails at `Pipeline::start`, not at creation.
-#[derive(Clone)]
-pub struct Imu(pub(crate) NodeHandle);
-node_type!(Imu, dai_pipeline_create_imu);
+node_type!(
+    /// A `dai::node::IMU`. Enable sensors, set batching, read
+    /// [`ImuData`] batches from [`out`](Self::out).
+    ///
+    /// Not every OAK carries an IMU: check
+    /// [`Device::connected_imu`](crate::Device::connected_imu) before creating the
+    /// node, because a missing IMU fails at `Pipeline::start`, not at creation.
+    Imu,
+    dai_pipeline_create_imu
+);
 
 impl Imu {
     pub fn out(&self) -> Result<Output<ImuData>> {

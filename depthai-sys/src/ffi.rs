@@ -4,9 +4,9 @@
 use std::os::raw::{c_char, c_int};
 
 use crate::{
-    dai_bootloader, dai_calib, dai_device, dai_device_info, dai_encoded_frame_info,
-    dai_img_frame_info, dai_imu_packet, dai_input, dai_msg, dai_node, dai_output, dai_pipeline,
-    dai_queue,
+    dai_bootloader, dai_buffer_info, dai_calib, dai_device, dai_device_info,
+    dai_encoded_frame_info, dai_img_frame_info, dai_imu_packet, dai_input, dai_msg, dai_node,
+    dai_output, dai_pipeline, dai_queue,
 };
 
 extern "C" {
@@ -17,6 +17,11 @@ extern "C" {
     pub fn dai_steady_clock_now_ns(out: *mut i64) -> c_int;
     pub fn dai_device_open(
         name_or_id: *const c_char,
+        max_usb_speed: i32,
+        out: *mut *mut dai_device,
+    ) -> c_int;
+    pub fn dai_device_open_info(
+        info: *const dai_device_info,
         max_usb_speed: i32,
         out: *mut *mut dai_device,
     ) -> c_int;
@@ -174,6 +179,7 @@ extern "C" {
     pub fn dai_msg_release(m: *mut dai_msg);
     pub fn dai_msg_clone(m: *const dai_msg, out: *mut *mut dai_msg) -> c_int;
     pub fn dai_msg_datatype(m: *const dai_msg, out: *mut i32) -> c_int;
+    pub fn dai_buffer_get_info(m: *const dai_msg, out: *mut dai_buffer_info) -> c_int;
     pub fn dai_msg_data(m: *const dai_msg, ptr: *mut *const u8, len: *mut usize) -> c_int;
     pub fn dai_msg_timestamp_ns(m: *const dai_msg, out: *mut i64) -> c_int;
     pub fn dai_msg_timestamp_device_ns(m: *const dai_msg, out: *mut i64) -> c_int;

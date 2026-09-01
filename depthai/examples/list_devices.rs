@@ -11,7 +11,7 @@ fn main() -> depthai::Result<()> {
     }
     for d in &devices {
         println!(
-            "{:<24} id={:<20} state={:?} protocol={} platform={}",
+            "{:<24} id={:<20} state={:?} protocol={:?} platform={:?}",
             d.name, d.device_id, d.state, d.protocol, d.platform
         );
     }

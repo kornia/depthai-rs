@@ -6,25 +6,27 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::Datatype;
-use crate::error::{cstring, out_bool, out_string, out_val, poll_handle, Result};
-use crate::message::{Message, Msg, Sealed};
+use crate::error::{
+    cstring, duration_from_ns, duration_to_ns, out_bool, out_lines, out_val, poll_handle, Result,
+};
+use crate::message::{typed_from_raw, AnyMessage, Message, Sealed};
 
 /// A `dai::MessageGroup`.
 #[derive(Clone, Debug)]
 pub struct MessageGroup {
-    msg: Msg,
+    any: AnyMessage,
 }
 
 impl Sealed for MessageGroup {}
 impl Message for MessageGroup {
     const DATATYPE: Option<Datatype> = Some(Datatype::MessageGroup);
 
-    unsafe fn from_msg(msg: Msg) -> Result<Self> {
-        Ok(MessageGroup { msg })
+    fn from_any(any: AnyMessage) -> Result<Self> {
+        Ok(MessageGroup { any })
     }
 
-    fn as_msg(&self) -> &Msg {
-        &self.msg
+    fn as_any(&self) -> &AnyMessage {
+        &self.any
     }
 }
 
@@ -34,38 +36,31 @@ impl MessageGroup {
     pub fn get<M: Message>(&self, name: &str) -> Result<Option<M>> {
         let c = cstring(name)?;
         let found =
-            poll_handle(|out| unsafe { sys::dai_msg_group_get(self.msg.raw(), c.as_ptr(), out) })?;
-        let Some(raw) = found else {
-            return Ok(None);
-        };
+            poll_handle(|out| unsafe { sys::dai_msg_group_get(self.any.raw(), c.as_ptr(), out) })?;
         // SAFETY: a fresh owned handle from the shim.
-        unsafe { Msg::from_raw(raw) }.into_typed().map(Some)
+        found.map(|raw| unsafe { typed_from_raw(raw) }).transpose()
     }
 
     /// Member names.
     pub fn names(&self) -> Result<Vec<String>> {
-        let names = out_string(|p| unsafe { sys::dai_msg_group_names(self.msg.raw(), p) })?;
-        Ok(names
-            .lines()
-            .filter(|l| !l.is_empty())
-            .map(str::to_owned)
-            .collect())
+        out_lines(|p| unsafe { sys::dai_msg_group_names(self.any.raw(), p) })
     }
 
     pub fn num_messages(&self) -> Result<i64> {
-        out_val(|v| unsafe { sys::dai_msg_group_num_messages(self.msg.raw(), v) })
+        out_val(|v| unsafe { sys::dai_msg_group_num_messages(self.any.raw(), v) })
     }
 
     /// `isSynced(threshold)`: whether every member's timestamp lies within
     /// `threshold` of the others.
     pub fn is_synced(&self, threshold: Duration) -> Result<bool> {
-        let ns = threshold.as_nanos().min(i64::MAX as u128) as i64;
-        out_bool(|v| unsafe { sys::dai_msg_group_is_synced(self.msg.raw(), ns, v) })
+        out_bool(|v| unsafe {
+            sys::dai_msg_group_is_synced(self.any.raw(), duration_to_ns(threshold), v)
+        })
     }
 
     /// `getIntervalNs()`: the spread between the earliest and latest member.
     pub fn interval(&self) -> Result<Duration> {
-        let ns = out_val(|v| unsafe { sys::dai_msg_group_interval_ns(self.msg.raw(), v) })?;
-        Ok(Duration::from_nanos(ns.max(0) as u64))
+        out_val(|v| unsafe { sys::dai_msg_group_interval_ns(self.any.raw(), v) })
+            .map(duration_from_ns)
     }
 }

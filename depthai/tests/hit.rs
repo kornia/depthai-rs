@@ -184,7 +184,7 @@ fn device_node_port_names_are_what_the_wrappers_assume() {
     }
     let imu = p.create::<Imu>().unwrap();
     imu.out().unwrap();
-    assert_eq!(imu.type_name(), "IMU");
+    assert_eq!(imu.type_name().unwrap(), "IMU");
 
     // Node::Output* handed out earlier must still be valid after more requests.
     let cam = p.create::<Camera>().unwrap();

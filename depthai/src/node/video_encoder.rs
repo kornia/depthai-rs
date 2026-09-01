@@ -6,13 +6,14 @@ use depthai_sys as sys;
 use crate::enums::{RateControlMode, VideoEncoderProfile};
 use crate::error::{check, Result};
 use crate::message::{EncodedFrame, ImgFrame};
-use crate::node::{node_type, NodeHandle};
+use crate::node::node_type;
 use crate::port::{Input, Output};
 
-/// A `dai::node::VideoEncoder`. Feed it NV12 (or YUV420p) frames.
-#[derive(Clone)]
-pub struct VideoEncoder(pub(crate) NodeHandle);
-node_type!(VideoEncoder, dai_pipeline_create_video_encoder);
+node_type!(
+    /// A `dai::node::VideoEncoder`. Feed it NV12 (or YUV420p) frames.
+    VideoEncoder,
+    dai_pipeline_create_video_encoder
+);
 
 impl VideoEncoder {
     /// The `in` port.

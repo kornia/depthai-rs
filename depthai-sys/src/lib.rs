@@ -139,6 +139,30 @@ pub const DAI_XLINK_STATE_UNBOOTED: i32 = 2;
 pub const DAI_XLINK_STATE_BOOTLOADER: i32 = 3;
 pub const DAI_XLINK_STATE_FLASH_BOOTED: i32 = 4;
 
+pub const DAI_XLINK_PROTOCOL_USB_VSC: i32 = 0;
+pub const DAI_XLINK_PROTOCOL_USB_CDC: i32 = 1;
+pub const DAI_XLINK_PROTOCOL_PCIE: i32 = 2;
+pub const DAI_XLINK_PROTOCOL_IPC: i32 = 3;
+pub const DAI_XLINK_PROTOCOL_TCP_IP: i32 = 4;
+pub const DAI_XLINK_PROTOCOL_LOCAL_SHDMEM: i32 = 5;
+pub const DAI_XLINK_PROTOCOL_TCP_IP_OR_LOCAL_SHDMEM: i32 = 6;
+pub const DAI_XLINK_PROTOCOL_USB_EP: i32 = 7;
+pub const DAI_XLINK_PROTOCOL_ANY: i32 = 9;
+
+pub const DAI_XLINK_PLATFORM_ANY: i32 = 0;
+pub const DAI_XLINK_PLATFORM_MYRIAD_2: i32 = 2450;
+pub const DAI_XLINK_PLATFORM_MYRIAD_X: i32 = 2480;
+pub const DAI_XLINK_PLATFORM_RVC3: i32 = 3000;
+pub const DAI_XLINK_PLATFORM_RVC4: i32 = 4000;
+
+pub const DAI_ENC_PROFILE_JPEG: i32 = 0;
+pub const DAI_ENC_PROFILE_AVC: i32 = 1;
+pub const DAI_ENC_PROFILE_HEVC: i32 = 2;
+pub const DAI_ENC_FRAME_I: i32 = 0;
+pub const DAI_ENC_FRAME_P: i32 = 1;
+pub const DAI_ENC_FRAME_B: i32 = 2;
+pub const DAI_ENC_FRAME_UNKNOWN: i32 = 3;
+
 pub const DAI_PLATFORM_RVC2: i32 = 0;
 pub const DAI_PLATFORM_RVC3: i32 = 1;
 pub const DAI_PLATFORM_RVC4: i32 = 2;
@@ -163,6 +187,33 @@ impl Default for dai_device_info {
     fn default() -> Self {
         // SAFETY: all-zero is a valid value for every field (u8/i32 arrays and ints).
         unsafe { core::mem::zeroed() }
+    }
+}
+
+/// The `dai::ADatatype` / `dai::Buffer` getters every message has, in one copy.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct dai_buffer_info {
+    pub datatype: i32,
+    pub pad_: u32,
+    pub timestamp_ns: i64,
+    pub timestamp_device_ns: i64,
+    pub sequence_num: i64,
+    pub data: *const u8,
+    pub data_len: usize,
+}
+
+impl Default for dai_buffer_info {
+    fn default() -> Self {
+        dai_buffer_info {
+            datatype: 0,
+            pad_: 0,
+            timestamp_ns: 0,
+            timestamp_device_ns: 0,
+            sequence_num: 0,
+            data: core::ptr::null(),
+            data_len: 0,
+        }
     }
 }
 
@@ -253,6 +304,7 @@ mod tests {
     #[test]
     fn pod_layouts_match_header() {
         assert_eq!(size_of::<dai_device_info>(), 152);
+        assert_eq!(size_of::<dai_buffer_info>(), 48);
         assert_eq!(size_of::<dai_img_frame_info>(), 56);
         assert_eq!(size_of::<dai_imu_vec_report>(), 56);
         assert_eq!(size_of::<dai_imu_rotvec_report>(), 64);

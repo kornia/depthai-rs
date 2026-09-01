@@ -133,12 +133,35 @@ DAI_PIN(X_LINK_UNBOOTED, DAI_XLINK_STATE_UNBOOTED);
 DAI_PIN(X_LINK_BOOTLOADER, DAI_XLINK_STATE_BOOTLOADER);
 DAI_PIN(X_LINK_FLASH_BOOTED, DAI_XLINK_STATE_FLASH_BOOTED);
 
+DAI_PIN(X_LINK_USB_VSC, DAI_XLINK_PROTOCOL_USB_VSC);
+DAI_PIN(X_LINK_USB_CDC, DAI_XLINK_PROTOCOL_USB_CDC);
+DAI_PIN(X_LINK_PCIE, DAI_XLINK_PROTOCOL_PCIE);
+DAI_PIN(X_LINK_IPC, DAI_XLINK_PROTOCOL_IPC);
+DAI_PIN(X_LINK_TCP_IP, DAI_XLINK_PROTOCOL_TCP_IP);
+DAI_PIN(X_LINK_LOCAL_SHDMEM, DAI_XLINK_PROTOCOL_LOCAL_SHDMEM);
+DAI_PIN(X_LINK_TCP_IP_OR_LOCAL_SHDMEM, DAI_XLINK_PROTOCOL_TCP_IP_OR_LOCAL_SHDMEM);
+DAI_PIN(X_LINK_USB_EP, DAI_XLINK_PROTOCOL_USB_EP);
+DAI_PIN(X_LINK_ANY_PROTOCOL, DAI_XLINK_PROTOCOL_ANY);
+DAI_PIN(X_LINK_ANY_PLATFORM, DAI_XLINK_PLATFORM_ANY);
+DAI_PIN(X_LINK_MYRIAD_2, DAI_XLINK_PLATFORM_MYRIAD_2);
+DAI_PIN(X_LINK_MYRIAD_X, DAI_XLINK_PLATFORM_MYRIAD_X);
+DAI_PIN(X_LINK_RVC3, DAI_XLINK_PLATFORM_RVC3);
+DAI_PIN(X_LINK_RVC4, DAI_XLINK_PLATFORM_RVC4);
+DAI_PIN(dai::EncodedFrame::Profile::JPEG, DAI_ENC_PROFILE_JPEG);
+DAI_PIN(dai::EncodedFrame::Profile::AVC, DAI_ENC_PROFILE_AVC);
+DAI_PIN(dai::EncodedFrame::Profile::HEVC, DAI_ENC_PROFILE_HEVC);
+DAI_PIN(dai::EncodedFrame::FrameType::I, DAI_ENC_FRAME_I);
+DAI_PIN(dai::EncodedFrame::FrameType::P, DAI_ENC_FRAME_P);
+DAI_PIN(dai::EncodedFrame::FrameType::B, DAI_ENC_FRAME_B);
+DAI_PIN(dai::EncodedFrame::FrameType::Unknown, DAI_ENC_FRAME_UNKNOWN);
+
 DAI_PIN(dai::Platform::RVC2, DAI_PLATFORM_RVC2);
 DAI_PIN(dai::Platform::RVC3, DAI_PLATFORM_RVC3);
 DAI_PIN(dai::Platform::RVC4, DAI_PLATFORM_RVC4);
 
 // POD layout pins (mirrored by size_of tests in depthai-sys/src/lib.rs).
 static_assert(sizeof(dai_device_info) == 152, "dai_device_info layout changed");
+static_assert(sizeof(dai_buffer_info) == 48, "dai_buffer_info layout changed");
 static_assert(sizeof(dai_img_frame_info) == 56, "dai_img_frame_info layout changed");
 static_assert(sizeof(dai_imu_vec_report) == 56, "dai_imu_vec_report layout changed");
 static_assert(sizeof(dai_imu_rotvec_report) == 64, "dai_imu_rotvec_report layout changed");
@@ -341,6 +364,25 @@ int dai_device_open(const char* name_or_id, int32_t max_usb_speed, dai_device** 
             dev = std::make_shared<dai::Device>((dai::UsbSpeed)max_usb_speed);
         } else {
             dev = std::make_shared<dai::Device>();
+        }
+        *out = new dai_device{std::move(dev)};
+        return DAI_OK;
+    })
+}
+int dai_device_open_info(const dai_device_info* info, int32_t max_usb_speed, dai_device** out) {
+    DAI_REQUIRE(info && out, "null argument");
+    DAI_GUARD(dai_device_open_info, {
+        dai::DeviceInfo di(std::string(info->name),
+                           std::string(info->device_id),
+                           (XLinkDeviceState_t)info->state,
+                           (XLinkProtocol_t)info->protocol,
+                           (XLinkPlatform_t)info->platform,
+                           (XLinkError_t)info->status);
+        std::shared_ptr<dai::Device> dev;
+        if(max_usb_speed >= 0) {
+            dev = std::make_shared<dai::Device>(di, (dai::UsbSpeed)max_usb_speed);
+        } else {
+            dev = std::make_shared<dai::Device>(di);
         }
         *out = new dai_device{std::move(dev)};
         return DAI_OK;
@@ -979,6 +1021,21 @@ int dai_msg_datatype(const dai_msg* m, int32_t* out) {
     DAI_GUARD(dai_msg_datatype, {
         DAI_REQUIRE(m && m->ptr, "null message handle");
         *out = (int32_t)m->ptr->getDatatype();
+        return DAI_OK;
+    })
+}
+int dai_buffer_get_info(const dai_msg* m, dai_buffer_info* out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_buffer_get_info, {
+        auto b = msg_as<dai::Buffer>(m, "Buffer");
+        auto span = static_cast<const dai::Buffer&>(*b).getData();
+        std::memset(out, 0, sizeof(*out));
+        out->datatype = (int32_t)b->getDatatype();
+        out->timestamp_ns = steady_ns(b->getTimestamp());
+        out->timestamp_device_ns = steady_ns(b->getTimestampDevice());
+        out->sequence_num = b->getSequenceNum();
+        out->data = span.data();
+        out->data_len = span.size();
         return DAI_OK;
     })
 }

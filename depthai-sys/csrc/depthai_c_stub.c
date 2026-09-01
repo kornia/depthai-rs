@@ -13,6 +13,7 @@ void dai_string_free(char* s) {}
 const char* dai_build_version(void) { return "stub"; }
 int dai_steady_clock_now_ns(int64_t* out) { return DAI_ERR; }
 int dai_device_open(const char* name_or_id, int32_t max_usb_speed, dai_device** out) { return DAI_ERR; }
+int dai_device_open_info(const dai_device_info* info, int32_t max_usb_speed, dai_device** out) { return DAI_ERR; }
 void dai_device_release(dai_device* d) {}
 int dai_device_close(dai_device* d) { return DAI_ERR; }
 int dai_device_is_closed(const dai_device* d, int* out) { return DAI_ERR; }
@@ -100,6 +101,7 @@ int dai_queue_name(dai_queue* q, char** out) { return DAI_ERR; }
 void dai_msg_release(dai_msg* m) {}
 int dai_msg_clone(const dai_msg* m, dai_msg** out) { return DAI_ERR; }
 int dai_msg_datatype(const dai_msg* m, int32_t* out) { return DAI_ERR; }
+int dai_buffer_get_info(const dai_msg* m, dai_buffer_info* out) { return DAI_ERR; }
 int dai_msg_data(const dai_msg* m, const uint8_t** ptr, size_t* len) { return DAI_ERR; }
 int dai_msg_timestamp_ns(const dai_msg* m, int64_t* out) { return DAI_ERR; }
 int dai_msg_timestamp_device_ns(const dai_msg* m, int64_t* out) { return DAI_ERR; }

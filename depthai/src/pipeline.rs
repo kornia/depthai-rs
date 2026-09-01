@@ -9,6 +9,7 @@ use crate::device::Device;
 use crate::error::{check, out_bool, out_handle, Result};
 use crate::node::NodeType;
 
+#[derive(Debug)]
 pub(crate) struct PipelineInner {
     raw: NonNull<sys::dai_pipeline>,
     device: Option<Device>,
@@ -31,15 +32,9 @@ impl Drop for PipelineInner {
 ///
 /// Build the graph (create nodes, request outputs, link, create queues), then
 /// [`start`](Self::start). Configure from one thread before starting.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pipeline {
     inner: Arc<PipelineInner>,
-}
-
-impl std::fmt::Debug for Pipeline {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Pipeline").finish_non_exhaustive()
-    }
 }
 
 impl Pipeline {

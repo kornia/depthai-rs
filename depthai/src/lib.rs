@@ -77,7 +77,7 @@ pub use enums::*;
 pub use error::{DepthaiError, Result};
 pub use message::{
     AnyMessage, EncodedFrame, EncodedFrameInfo, ImgFrame, ImgFrameInfo, ImuData, ImuPacket,
-    ImuRotationVector, ImuVecReport, Message, MessageGroup, Msg, RawTimestamp,
+    ImuRotationVector, ImuVecReport, Message, MessageGroup, MessageHeader, RawTimestamp,
 };
 pub use node::{Node, NodeHandle, NodeType};
 pub use pipeline::Pipeline;

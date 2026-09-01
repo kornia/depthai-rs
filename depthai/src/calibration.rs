@@ -11,9 +11,10 @@ use std::ptr::NonNull;
 use depthai_sys as sys;
 
 use crate::enums::{CameraBoardSocket, CameraModel, LengthUnit};
-use crate::error::{check, out_val, Result};
+use crate::error::{check, fill_vec, out_val, Result};
 
 /// A snapshot of the device calibration (`dai::CalibrationHandler`).
+#[derive(Debug)]
 pub struct CalibrationHandler {
     raw: NonNull<sys::dai_calib>,
 }
@@ -26,12 +27,6 @@ unsafe impl Sync for CalibrationHandler {}
 impl Drop for CalibrationHandler {
     fn drop(&mut self) {
         unsafe { sys::dai_calib_release(self.raw.as_ptr()) };
-    }
-}
-
-impl std::fmt::Debug for CalibrationHandler {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("CalibrationHandler")
     }
 }
 
@@ -67,23 +62,22 @@ impl CalibrationHandler {
     /// `[k1, k2, p1, p2, k3, k4, k5, k6, s1, s2, s3, s4, τx, τy]` — as many as the
     /// EEPROM carries (usually 14). Resolution-independent.
     pub fn distortion_coefficients(&self, socket: CameraBoardSocket) -> Result<Vec<f32>> {
-        let mut buf = [0f32; 32];
-        let n = out_val(|n| unsafe {
-            sys::dai_calib_distortion_coefficients(
-                self.raw(),
-                socket.to_raw(),
-                buf.as_mut_ptr(),
-                buf.len(),
-                n,
-            )
-        })?;
-        Ok(buf[..n.min(buf.len())].to_vec())
+        fill_vec::<f32>(32, |buf| {
+            out_val(|n| unsafe {
+                sys::dai_calib_distortion_coefficients(
+                    self.raw(),
+                    socket.to_raw(),
+                    buf.as_mut_ptr(),
+                    buf.len(),
+                    n,
+                )
+            })
+        })
     }
 
     pub fn distortion_model(&self, socket: CameraBoardSocket) -> Result<CameraModel> {
-        Ok(CameraModel::from_raw(out_val(|v| unsafe {
-            sys::dai_calib_distortion_model(self.raw(), socket.to_raw(), v)
-        })?))
+        out_val(|v| unsafe { sys::dai_calib_distortion_model(self.raw(), socket.to_raw(), v) })
+            .map(CameraModel::from_raw)
     }
 
     /// The 4x4 transform `X_dst = T · X_src` (row-major).
@@ -177,15 +171,13 @@ impl CalibrationHandler {
     }
 
     pub fn stereo_left_socket(&self) -> Result<CameraBoardSocket> {
-        Ok(CameraBoardSocket::from_raw(out_val(|v| unsafe {
-            sys::dai_calib_stereo_left_socket(self.raw(), v)
-        })?))
+        out_val(|v| unsafe { sys::dai_calib_stereo_left_socket(self.raw(), v) })
+            .map(CameraBoardSocket::from_raw)
     }
 
     pub fn stereo_right_socket(&self) -> Result<CameraBoardSocket> {
-        Ok(CameraBoardSocket::from_raw(out_val(|v| unsafe {
-            sys::dai_calib_stereo_right_socket(self.raw(), v)
-        })?))
+        out_val(|v| unsafe { sys::dai_calib_stereo_right_socket(self.raw(), v) })
+            .map(CameraBoardSocket::from_raw)
     }
 
     /// Horizontal field of view in degrees. `use_spec`: from the board spec rather

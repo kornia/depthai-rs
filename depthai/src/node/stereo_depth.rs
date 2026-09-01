@@ -5,13 +5,14 @@ use depthai_sys as sys;
 use crate::enums::{CameraBoardSocket, StereoPresetMode};
 use crate::error::{check, Result};
 use crate::message::ImgFrame;
-use crate::node::{node_type, NodeHandle};
+use crate::node::node_type;
 use crate::port::{Input, Output};
 
-/// A `dai::node::StereoDepth`.
-#[derive(Clone)]
-pub struct StereoDepth(pub(crate) NodeHandle);
-node_type!(StereoDepth, dai_pipeline_create_stereo_depth);
+node_type!(
+    /// A `dai::node::StereoDepth`.
+    StereoDepth,
+    dai_pipeline_create_stereo_depth
+);
 
 impl StereoDepth {
     pub fn left(&self) -> Result<Input> {

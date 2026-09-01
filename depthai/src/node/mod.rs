@@ -1,6 +1,6 @@
 //! Pipeline nodes. Each node type is a thin, `Clone`able handle onto the
 //! C++ node owned by its [`Pipeline`]; the [`Node`] trait carries what every
-//! node shares (identity, port introspection, untyped port lookup).
+//! node shares (identity, port introspection, port lookup by name).
 
 mod camera;
 mod imu;
@@ -20,13 +20,13 @@ use std::sync::Arc;
 use depthai_sys as sys;
 
 use crate::error::{
-    cstring, out_string, out_val, poll_handle, static_string, take_native_error, DepthaiError,
-    Result,
+    check, cstring, out_lines, out_val, poll_handle, static_string, DepthaiError, Result,
 };
 use crate::message::{AnyMessage, Message};
 use crate::pipeline::Pipeline;
 use crate::port::{Input, Output};
 
+#[derive(Debug)]
 pub(crate) struct NodeInner {
     raw: NonNull<sys::dai_node>,
     /// Keeps the pipeline (and through it the device) alive while any handle to
@@ -49,18 +49,15 @@ impl Drop for NodeInner {
 }
 
 /// An untyped handle to any node. The typed node structs wrap one of these.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NodeHandle {
     inner: Arc<NodeInner>,
 }
 
-impl std::fmt::Debug for NodeHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeHandle")
-            .field("type", &self.type_name())
-            .field("id", &self.id().ok())
-            .finish()
-    }
+/// Split a `"group/name"` port spec (as [`Node::output_names`] emits) into its
+/// parts; a bare name means the default group.
+fn split_port(spec: &str) -> (&str, &str) {
+    spec.split_once('/').unwrap_or(("", spec))
 }
 
 impl NodeHandle {
@@ -86,54 +83,56 @@ impl NodeHandle {
     }
 
     /// The C++ node type name (e.g. `"Camera"`).
-    pub fn type_name(&self) -> String {
+    pub fn type_name(&self) -> Result<String> {
         let mut p: *const std::os::raw::c_char = std::ptr::null();
-        if unsafe { sys::dai_node_type_name(self.raw(), &mut p) } < 0 {
-            let _ = take_native_error();
-            return String::new();
-        }
-        unsafe { static_string(p) }
+        check(unsafe { sys::dai_node_type_name(self.raw(), &mut p) })?;
+        // SAFETY: the shim returns a string with static storage.
+        Ok(unsafe { static_string(p) })
     }
 
     /// Every output as `"group/name"`.
     pub fn output_names(&self) -> Result<Vec<String>> {
-        let names = out_string(|p| unsafe { sys::dai_node_output_names(self.raw(), p) })?;
-        Ok(names.lines().map(str::to_owned).collect())
+        out_lines(|p| unsafe { sys::dai_node_output_names(self.raw(), p) })
     }
 
     /// Every input as `"group/name"`.
     pub fn input_names(&self) -> Result<Vec<String>> {
-        let names = out_string(|p| unsafe { sys::dai_node_input_names(self.raw(), p) })?;
-        Ok(names.lines().map(str::to_owned).collect())
+        out_lines(|p| unsafe { sys::dai_node_input_names(self.raw(), p) })
     }
 
-    /// `Node::getOutputRef(name)` in the default group. `Ok(None)` when absent.
-    pub fn output_by_name(&self, name: &str) -> Result<Option<Output<AnyMessage>>> {
-        self.output_typed(name)
-    }
-
-    /// `Node::getInputRef(name)` in the default group. `Ok(None)` when absent.
-    pub fn input_by_name(&self, name: &str) -> Result<Option<Input>> {
-        let c = cstring(name)?;
+    /// `Node::getOutputRef(group, name)`, typed as `M`. `spec` is `"name"` (default
+    /// group) or `"group/name"` as [`output_names`](Self::output_names) emits.
+    /// `Ok(None)` when absent.
+    pub fn output<M: Message>(&self, spec: &str) -> Result<Option<Output<M>>> {
+        let (group, name) = split_port(spec);
+        let (g, n) = (cstring(group)?, cstring(name)?);
         let found = poll_handle(|out| unsafe {
-            sys::dai_node_input_ref(self.raw(), c"".as_ptr(), c.as_ptr(), out)
-        })?;
-        // SAFETY: the shim handed out a port owned by this node.
-        Ok(found.map(|raw| unsafe { Input::from_raw(self.clone(), raw) }))
-    }
-
-    pub(crate) fn output_typed<M: Message>(&self, name: &str) -> Result<Option<Output<M>>> {
-        let c = cstring(name)?;
-        let found = poll_handle(|out| unsafe {
-            sys::dai_node_output_ref(self.raw(), c"".as_ptr(), c.as_ptr(), out)
+            sys::dai_node_output_ref(self.raw(), g.as_ptr(), n.as_ptr(), out)
         })?;
         // SAFETY: the shim handed out a port owned by this node.
         Ok(found.map(|raw| unsafe { Output::from_raw(self.clone(), raw) }))
     }
 
+    /// [`output`](Self::output) untyped.
+    pub fn output_by_name(&self, spec: &str) -> Result<Option<Output<AnyMessage>>> {
+        self.output(spec)
+    }
+
+    /// `Node::getInputRef(group, name)`; `spec` as for [`output`](Self::output).
+    /// `Ok(None)` when absent.
+    pub fn input_by_name(&self, spec: &str) -> Result<Option<Input>> {
+        let (group, name) = split_port(spec);
+        let (g, n) = (cstring(group)?, cstring(name)?);
+        let found = poll_handle(|out| unsafe {
+            sys::dai_node_input_ref(self.raw(), g.as_ptr(), n.as_ptr(), out)
+        })?;
+        // SAFETY: the shim handed out a port owned by this node.
+        Ok(found.map(|raw| unsafe { Input::from_raw(self.clone(), raw) }))
+    }
+
     /// A fixed port that the node type guarantees exists.
     pub(crate) fn output_required<M: Message>(&self, name: &str) -> Result<Output<M>> {
-        self.output_typed(name)?
+        self.output(name)?
             .ok_or_else(|| self.missing_port("output", name))
     }
 
@@ -142,8 +141,12 @@ impl NodeHandle {
             .ok_or_else(|| self.missing_port("input", name))
     }
 
-    fn missing_port(&self, kind: &str, name: &str) -> DepthaiError {
-        DepthaiError::Malformed(format!("{} has no {kind} named {name:?}", self.type_name()))
+    fn missing_port(&self, kind: &'static str, name: &str) -> DepthaiError {
+        DepthaiError::MissingPort {
+            node: self.type_name().unwrap_or_default(),
+            kind,
+            name: name.to_owned(),
+        }
     }
 }
 
@@ -154,7 +157,7 @@ pub trait Node {
     fn id(&self) -> Result<i64> {
         self.handle().id()
     }
-    fn type_name(&self) -> String {
+    fn type_name(&self) -> Result<String> {
         self.handle().type_name()
     }
     fn output_names(&self) -> Result<Vec<String>> {
@@ -163,14 +166,20 @@ pub trait Node {
     fn input_names(&self) -> Result<Vec<String>> {
         self.handle().input_names()
     }
-    fn output_by_name(&self, name: &str) -> Result<Option<Output<AnyMessage>>> {
-        self.handle().output_by_name(name)
+    fn output_by_name(&self, spec: &str) -> Result<Option<Output<AnyMessage>>> {
+        self.handle().output_by_name(spec)
     }
-    fn input_by_name(&self, name: &str) -> Result<Option<Input>> {
-        self.handle().input_by_name(name)
+    fn input_by_name(&self, spec: &str) -> Result<Option<Input>> {
+        self.handle().input_by_name(spec)
     }
     fn pipeline(&self) -> &Pipeline {
         self.handle().pipeline()
+    }
+}
+
+impl Node for NodeHandle {
+    fn handle(&self) -> &NodeHandle {
+        self
     }
 }
 
@@ -179,10 +188,14 @@ pub trait NodeType: Node + Sized {
     fn create(pipeline: &Pipeline) -> Result<Self>;
 }
 
-/// Implement `Node` + `NodeType` for a newtype over `NodeHandle` created by the
-/// given shim function.
+/// Declare a typed node: a newtype over `NodeHandle` created by the given shim
+/// function, with `Node` + `NodeType` implemented.
 macro_rules! node_type {
-    ($name:ident, $create:ident) => {
+    ($(#[$meta:meta])* $name:ident, $create:ident) => {
+        $(#[$meta])*
+        #[derive(Clone, Debug)]
+        pub struct $name(pub(crate) crate::node::NodeHandle);
+
         impl crate::node::Node for $name {
             fn handle(&self) -> &crate::node::NodeHandle {
                 &self.0
@@ -199,11 +212,15 @@ macro_rules! node_type {
                 }))
             }
         }
-        impl std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_tuple(stringify!($name)).field(&self.0).finish()
-            }
-        }
     };
 }
 pub(crate) use node_type;
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn port_spec_splits_group() {
+        assert_eq!(super::split_port("depth"), ("", "depth"));
+        assert_eq!(super::split_port("inputs/left"), ("inputs", "left"));
+    }
+}

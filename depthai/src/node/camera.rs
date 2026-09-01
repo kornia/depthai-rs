@@ -2,17 +2,23 @@
 
 use depthai_sys as sys;
 
-use crate::enums::{CameraBoardSocket, ImgFrameType, ImgResizeMode};
+use crate::enums::{opt_raw, CameraBoardSocket, ImgFrameType, ImgResizeMode};
 use crate::error::{check, out_handle, out_val, Result};
 use crate::message::ImgFrame;
-use crate::node::{node_type, NodeHandle};
+use crate::node::node_type;
 use crate::port::Output;
 
-/// A `dai::node::Camera`. Create it, [`build`](Self::build) it onto a socket,
-/// then [`request_output`](Self::request_output) one or more streams.
-#[derive(Clone)]
-pub struct Camera(pub(crate) NodeHandle);
-node_type!(Camera, dai_pipeline_create_camera);
+node_type!(
+    /// A `dai::node::Camera`. Create it, [`build`](Self::build) it onto a socket,
+    /// then [`request_output`](Self::request_output) one or more streams.
+    Camera,
+    dai_pipeline_create_camera
+);
+
+/// `Option<(w, h)>` as the shim's `-1, -1` = nullopt pair.
+fn opt_size(size: Option<(u32, u32)>) -> (i32, i32) {
+    size.map_or((-1, -1), |(w, h)| (w as i32, h as i32))
+}
 
 impl Camera {
     /// `Camera::build(socket)`: bind to a board socket with automatic sensor
@@ -29,7 +35,7 @@ impl Camera {
         sensor_resolution: Option<(u32, u32)>,
         sensor_fps: Option<f32>,
     ) -> Result<&Self> {
-        let (w, h) = sensor_resolution.map_or((-1, -1), |(w, h)| (w as i32, h as i32));
+        let (w, h) = opt_size(sensor_resolution);
         check(unsafe {
             sys::dai_camera_build(
                 self.0.raw(),
@@ -43,9 +49,8 @@ impl Camera {
     }
 
     pub fn board_socket(&self) -> Result<CameraBoardSocket> {
-        Ok(CameraBoardSocket::from_raw(out_val(|v| unsafe {
-            sys::dai_camera_board_socket(self.0.raw(), v)
-        })?))
+        out_val(|v| unsafe { sys::dai_camera_board_socket(self.0.raw(), v) })
+            .map(CameraBoardSocket::from_raw)
     }
 
     /// `requestOutput(size, type, resizeMode, fps, enableUndistortion)`: a new
@@ -67,7 +72,7 @@ impl Camera {
                 self.0.raw(),
                 size.0,
                 size.1,
-                img_type.map_or(-1, |t| t.to_raw()),
+                opt_raw(img_type),
                 resize_mode.to_raw(),
                 fps.unwrap_or(-1.0),
                 undistort.map_or(-1, |u| u as i32),
@@ -88,7 +93,7 @@ impl Camera {
         let raw = out_handle(|out| unsafe {
             sys::dai_camera_request_full_resolution_output(
                 self.0.raw(),
-                img_type.map_or(-1, |t| t.to_raw()),
+                opt_raw(img_type),
                 fps.unwrap_or(-1.0),
                 use_highest_resolution as i32,
                 out,

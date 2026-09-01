@@ -5,8 +5,8 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::{Datatype, ImuAccuracy};
-use crate::error::{out_val, Result};
-use crate::message::{Message, Msg, Sealed};
+use crate::error::{check, duration_from_ns, fill_vec, Result};
+use crate::message::{AnyMessage, Message, Sealed};
 
 /// A raw `dai::Timestamp { sec, nsec }` on the host `steady_clock`.
 ///
@@ -33,7 +33,7 @@ impl RawTimestamp {
     }
 
     pub fn as_duration(&self) -> Duration {
-        Duration::from_nanos(self.as_nanos().max(0) as u64)
+        duration_from_ns(self.as_nanos())
     }
 }
 
@@ -138,43 +138,35 @@ impl ImuPacket {
 /// A `dai::IMUData` batch (up to `setMaxBatchReports` packets).
 #[derive(Clone, Debug)]
 pub struct ImuData {
-    msg: Msg,
+    any: AnyMessage,
 }
 
 impl Sealed for ImuData {}
 impl Message for ImuData {
     const DATATYPE: Option<Datatype> = Some(Datatype::ImuData);
 
-    unsafe fn from_msg(msg: Msg) -> Result<Self> {
-        Ok(ImuData { msg })
+    fn from_any(any: AnyMessage) -> Result<Self> {
+        Ok(ImuData { any })
     }
 
-    fn as_msg(&self) -> &Msg {
-        &self.msg
+    fn as_any(&self) -> &AnyMessage {
+        &self.any
     }
 }
 
 impl ImuData {
     /// Copy the packets out, appending to `out`; returns how many were appended.
     pub fn packets_into(&self, out: &mut Vec<ImuPacket>) -> Result<usize> {
-        // Fills `buf` and reports the batch's packet count, which may exceed it.
-        let fill = |buf: &mut [sys::dai_imu_packet]| -> Result<usize> {
-            // SAFETY: `buf` has `len` valid entries.
-            out_val(|n| unsafe {
-                sys::dai_imu_data_packets(self.msg.raw(), buf.as_mut_ptr(), buf.len(), n)
-            })
-        };
-        let mut buf = [sys::dai_imu_packet::default(); 16];
-        let n = fill(&mut buf)?;
-        if n <= buf.len() {
-            out.extend(buf[..n].iter().map(ImuPacket::from_raw));
-            return Ok(n);
-        }
-        // Too big for the stack buffer: ask again with an exact-sized one.
-        let mut big = vec![sys::dai_imu_packet::default(); n];
-        let n = fill(&mut big)?.min(big.len());
-        out.extend(big[..n].iter().map(ImuPacket::from_raw));
-        Ok(n)
+        // depthai caps maxBatchReports at 5; 8 covers it without a regrow.
+        let raw = fill_vec::<sys::dai_imu_packet>(8, |buf| {
+            let mut n: usize = 0;
+            check(unsafe {
+                sys::dai_imu_data_packets(self.any.raw(), buf.as_mut_ptr(), buf.len(), &mut n)
+            })?;
+            Ok(n)
+        })?;
+        out.extend(raw.iter().map(ImuPacket::from_raw));
+        Ok(raw.len())
     }
 
     /// The packets in this batch.
