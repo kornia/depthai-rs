@@ -63,8 +63,8 @@ impl<M: Message> Output<M> {
         let raw = out_handle(|out| unsafe {
             sys::dai_output_create_queue(self.raw(), max_size, blocking as i32, out)
         })?;
-        // SAFETY: fresh owned handle.
-        Ok(unsafe { OutputQueue::from_raw(raw) })
+        // SAFETY: fresh owned handle on a port of `self.node`.
+        Ok(unsafe { OutputQueue::from_raw(raw, self.node.clone()) })
     }
 
     /// The node this port belongs to.

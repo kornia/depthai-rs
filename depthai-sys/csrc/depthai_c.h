@@ -472,8 +472,8 @@ int dai_imu_set_max_batch_reports(dai_node* imu, int32_t n);
 void dai_queue_release(dai_queue* q);
 /* Non-blocking pop: 1 got / 0 empty / -1. */
 int dai_queue_try_get(dai_queue* q, dai_msg** out);
-/* Blocking pop with timeout (`timeout_ns` < 0 = forever): 1 got / 0 timed out / -1
- * (including a closed queue). */
+/* Blocking pop with timeout (`timeout_ns` < 0, or >= INT64_MAX/2, = forever):
+ * 1 got / 0 timed out / -1 (including a closed queue). */
 int dai_queue_get(dai_queue* q, int64_t timeout_ns, dai_msg** out);
 int dai_queue_has(dai_queue* q, int* out);
 int dai_queue_size(dai_queue* q, uint32_t* out);

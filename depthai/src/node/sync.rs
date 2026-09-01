@@ -21,7 +21,11 @@ impl Sync {
     /// The `inputs[name]` map entry — created on first use, like depthai's
     /// `InputMap::operator[]`. A typo therefore yields a dangling, never-fed input
     /// (the Sync never emits) rather than an error; check
-    /// [`input_names`](crate::node::Node::input_names) when debugging.
+    /// [`input_names`](crate::node::Node::input_names) when debugging. Map ports
+    /// are not visible to `input_by_name` (which only sees fixed ports).
+    ///
+    /// Like every setter, call this before [`Pipeline::start`](crate::Pipeline::start):
+    /// a Sync running on the host reads its map from its own thread.
     pub fn input(&self, name: &str) -> Result<Input> {
         let c = cstring(name)?;
         let raw = out_handle(|out| unsafe { sys::dai_sync_input(self.0.raw(), c.as_ptr(), out) })?;

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -565,6 +566,7 @@ int dai_pipeline_start(dai_pipeline* p) {
 }
 int dai_pipeline_stop(dai_pipeline* p) {
     DAI_GUARD(dai_pipeline_stop, {
+        DAI_LOCK_GRAPH;
         pipeline_of(p).stop();
         return DAI_OK;
     })
@@ -959,7 +961,9 @@ int dai_queue_get(dai_queue* q, int64_t timeout_ns, dai_msg** out) {
     DAI_GUARD(dai_queue_get, {
         auto qu = queue_of(q);
         std::shared_ptr<dai::ADatatype> m;
-        if(timeout_ns < 0) {
+        // A timeout near INT64_MAX would overflow steady_clock::now() + timeout
+        // inside depthai and return at once; treat it as "forever".
+        if(timeout_ns < 0 || timeout_ns >= INT64_MAX / 2) {
             m = qu->get();
         } else {
             bool timedOut = false;
@@ -1113,7 +1117,11 @@ int dai_img_frame_plane_stride(const dai_msg* m, int32_t plane, uint32_t* out) {
 int dai_img_frame_plane_height(const dai_msg* m, uint32_t* out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_img_frame_plane_height, {
-        *out = msg_as<dai::ImgFrame>(m, "ImgFrame")->getPlaneHeight();
+        auto f = msg_as<dai::ImgFrame>(m, "ImgFrame");
+        // getPlaneHeight() is planeStride / stride with no guard: a malformed frame
+        // (width 0 or type NONE) would divide by zero.
+        DAI_REQUIRE(f->getStride() != 0, "frame has zero stride");
+        *out = f->getPlaneHeight();
         return DAI_OK;
     })
 }

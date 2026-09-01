@@ -215,8 +215,7 @@ fn copy_fixed(dst: &mut [u8], s: &str) {
 /// (`SystemTime::now()` sampled at the same instant), which this crate
 /// deliberately does not do for you.
 pub fn steady_now() -> Result<Duration> {
-    let ns = out_val(|ns| unsafe { sys::dai_steady_clock_now_ns(ns) })?;
-    Ok(Duration::from_nanos(ns.max(0) as u64))
+    out_val(|ns| unsafe { sys::dai_steady_clock_now_ns(ns) }).map(duration_from_ns)
 }
 
 /// depthai-core's version string (e.g. `3.7.1`).

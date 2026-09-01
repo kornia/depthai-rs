@@ -64,7 +64,8 @@ impl StereoDepth {
     pub fn set_extended_disparity(&self, enable: bool) -> Result<()> {
         check(unsafe { sys::dai_stereo_depth_set_extended_disparity(self.0.raw(), enable as i32) })
     }
-    /// Output size of the depth map. XLink requires even dimensions.
+    /// Output size of the depth map. XLink requires even dimensions. Not supported
+    /// on RVC4 (depthai throws at the call).
     pub fn set_output_size(&self, width: u32, height: u32) -> Result<()> {
         check(unsafe {
             sys::dai_stereo_depth_set_output_size(self.0.raw(), width as i32, height as i32)

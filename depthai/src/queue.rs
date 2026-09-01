@@ -11,10 +11,14 @@ use crate::error::{
     check, duration_to_ns, out_bool, out_string, out_val, poll_handle, take_native_error, Result,
 };
 use crate::message::{typed_from_raw, Message};
+use crate::node::NodeHandle;
 
 #[derive(Debug)]
 struct QueueInner {
     raw: NonNull<sys::dai_queue>,
+    /// The node (and through it the pipeline + device) this queue is fed by:
+    /// dropping the pipeline would stop it and close every queue.
+    node: NodeHandle,
 }
 
 // SAFETY: MessageQueue guards its state with a mutex + condvar; the handle is a
@@ -34,9 +38,10 @@ impl Drop for QueueInner {
 ///
 /// Cloning shares the queue. Methods take `&self`: depthai's `MessageQueue` is
 /// internally synchronised, so one thread can poll while another configures.
-/// Dropping the last clone releases this handle only; the output stays linked and
-/// the queue stays bounded by `max_size` (a *blocking* queue that nobody drains
-/// will stall its producer — call [`close`](Self::close) first).
+/// The queue keeps its pipeline alive (a pipeline that drops would stop and close
+/// every queue). Dropping the last clone releases this handle only; the output
+/// stays linked and the queue stays bounded by `max_size` (a *blocking* queue that
+/// nobody drains will stall its producer — call [`close`](Self::close) first).
 #[derive(Clone, Debug)]
 pub struct OutputQueue<M: Message> {
     inner: Arc<QueueInner>,
@@ -45,12 +50,18 @@ pub struct OutputQueue<M: Message> {
 
 impl<M: Message> OutputQueue<M> {
     /// # Safety
-    /// `raw` must be a live handle from `dai_output_create_queue`, owned by the caller.
-    pub(crate) unsafe fn from_raw(raw: NonNull<sys::dai_queue>) -> Self {
+    /// `raw` must be a live handle from `dai_output_create_queue` on a port of
+    /// `node`, owned by the caller.
+    pub(crate) unsafe fn from_raw(raw: NonNull<sys::dai_queue>, node: NodeHandle) -> Self {
         OutputQueue {
-            inner: Arc::new(QueueInner { raw }),
+            inner: Arc::new(QueueInner { raw, node }),
             _m: PhantomData,
         }
+    }
+
+    /// The node this queue is fed by.
+    pub fn node(&self) -> &NodeHandle {
+        &self.inner.node
     }
 
     fn raw(&self) -> *mut sys::dai_queue {
@@ -75,7 +86,11 @@ impl<M: Message> OutputQueue<M> {
         found.map(|raw| unsafe { typed_from_raw(raw) }).transpose()
     }
 
-    /// Block until the next message (errors if the queue is closed).
+    /// Block until the next message (errors once the queue is closed).
+    ///
+    /// Only a *started* pipeline ever closes its queues; on one that never
+    /// started (e.g. `start()` failed) this blocks forever — prefer
+    /// [`get`](Self::get) with a timeout there.
     pub fn get_blocking(&self) -> Result<M> {
         let found = poll_handle(|out| unsafe { sys::dai_queue_get(self.raw(), -1, out) })?;
         match found {

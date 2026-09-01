@@ -1,7 +1,7 @@
 //! [`Pipeline`]: the node graph that runs on a device.
 
 use std::ptr::NonNull;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use depthai_sys as sys;
 
@@ -13,6 +13,9 @@ use crate::node::NodeType;
 pub(crate) struct PipelineInner {
     raw: NonNull<sys::dai_pipeline>,
     device: Option<Device>,
+    /// `PipelineImpl::wait()` joins node threads without any lock of its own;
+    /// serialise concurrent `wait()` calls from clones here.
+    wait_lock: Mutex<()>,
 }
 
 // SAFETY: PipelineImpl serialises its state internally; the handle is unique on
@@ -27,11 +30,15 @@ impl Drop for PipelineInner {
     }
 }
 
-/// A `dai::Pipeline`. Cloning shares the same pipeline; nodes created from it
-/// keep it alive, and it keeps its [`Device`] alive.
+/// A `dai::Pipeline`. Cloning shares the same pipeline; nodes, ports and queues
+/// created from it keep it alive, and it keeps its [`Device`] alive.
 ///
 /// Build the graph (create nodes, request outputs, link, create queues), then
 /// [`start`](Self::start). Configure from one thread before starting.
+///
+/// Dropping the last handle stops the pipeline, which — as in depthai itself —
+/// **closes its device and every output queue**: a [`Device`] clone kept past
+/// that point is closed, and queues return `Err` from then on.
 #[derive(Clone, Debug)]
 pub struct Pipeline {
     inner: Arc<PipelineInner>,
@@ -45,6 +52,7 @@ impl Pipeline {
             inner: Arc::new(PipelineInner {
                 raw,
                 device: Some(device.clone()),
+                wait_lock: Mutex::new(()),
             }),
         })
     }
@@ -54,7 +62,11 @@ impl Pipeline {
     pub fn host_only() -> Result<Pipeline> {
         let raw = out_handle(|out| unsafe { sys::dai_pipeline_new_host_only(out) })?;
         Ok(Pipeline {
-            inner: Arc::new(PipelineInner { raw, device: None }),
+            inner: Arc::new(PipelineInner {
+                raw,
+                device: None,
+                wait_lock: Mutex::new(()),
+            }),
         })
     }
 
@@ -87,12 +99,19 @@ impl Pipeline {
         check(unsafe { sys::dai_pipeline_start(self.raw()) })
     }
 
+    /// Stop the pipeline: closes every output queue and the device.
     pub fn stop(&self) -> Result<()> {
         check(unsafe { sys::dai_pipeline_stop(self.raw()) })
     }
 
-    /// Block until the pipeline stops.
+    /// Block until the pipeline stops (joins the node threads). Concurrent `wait`
+    /// calls from clones are serialised; do not mutate the graph while waiting.
     pub fn wait(&self) -> Result<()> {
+        let _guard = self
+            .inner
+            .wait_lock
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         check(unsafe { sys::dai_pipeline_wait(self.raw()) })
     }
 

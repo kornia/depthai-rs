@@ -28,7 +28,8 @@ impl Camera {
     }
 
     /// `Camera::build(socket, sensorResolution, sensorFps)`: bind with an explicit
-    /// sensor mode.
+    /// sensor mode. A non-positive fps or a zero dimension selects the default
+    /// (the shim's sentinels), rather than depthai's "invalid" error.
     pub fn build_with(
         &self,
         socket: CameraBoardSocket,
@@ -54,7 +55,8 @@ impl Camera {
     }
 
     /// `requestOutput(size, type, resizeMode, fps, enableUndistortion)`: a new
-    /// output stream at `size`. `None` arguments take depthai's defaults.
+    /// output stream at `size`. `None` arguments take depthai's defaults, and so
+    /// does a non-positive `fps` (the shim's sentinel is "<= 0").
     ///
     /// Note `undistort = Some(true)` undistorts but never *rectifies* (the
     /// rectifying rotation is identity); a stereo consumer that rectifies on the

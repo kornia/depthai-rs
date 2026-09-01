@@ -52,7 +52,10 @@ fn main() -> depthai::Result<()> {
             .request_output((640, 400), None, ImgResizeMode::Crop, Some(fps), None)?
             .link(&stereo.right()?)?;
         rgb_out.link(&stereo.input_align_to()?)?;
-        stereo.set_output_size(w / 2, h / 2)?;
+        // setOutputSize is not supported on RVC4.
+        if dev.platform()? != depthai::Platform::Rvc4 {
+            stereo.set_output_size(w / 2, h / 2)?;
+        }
         Some(stereo.depth()?.create_output_queue(4, false)?)
     } else {
         None

@@ -163,6 +163,27 @@ fn find_libusb_dir(prefix: &Path) -> Option<PathBuf> {
     (!dir.is_empty() && Path::new(&dir).is_dir()).then(|| PathBuf::from(dir))
 }
 
+/// Does this libdepthai-core.so leave `ImageFilters` undefined (built with
+/// DEPTHAI_OPENCV_SUPPORT=OFF)? Decided with `nm -D --undefined-only`; when nm is
+/// unavailable, assume it does not (a strong definition then wins anyway).
+fn library_lacks_image_filters(prefix: &Path) -> bool {
+    let lib = prefix.join("lib/libdepthai-core.so");
+    let Ok(out) = Command::new("nm")
+        .args(["-D", "--undefined-only"])
+        .arg(&lib)
+        .output()
+    else {
+        println!("cargo:warning=depthai-sys: nm not found; assuming libdepthai-core.so defines ImageFilters");
+        return false;
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let lacks = text.lines().any(|l| l.contains("ImageFilters"));
+    if lacks {
+        println!("cargo:warning=depthai-sys: libdepthai-core.so was built without OpenCV; compiling weak ImageFilters/Rectification fallbacks");
+    }
+    lacks
+}
+
 fn build_stub() {
     println!("cargo:warning=depthai-sys: DEPTHAI_SYS_SKIP_NATIVE set — linking the error-only stub, NOT depthai-core");
     println!("cargo:rpath=");
@@ -199,9 +220,13 @@ fn main() {
     }
 
     // 1. The shim, with depthai's include + link flags resolved by its CMake config.
+    //    The weak no-OpenCV fallbacks are compiled only when this libdepthai-core.so
+    //    actually leaves those symbols undefined, so they can never shadow real ones.
+    let nocv = library_lacks_image_filters(&prefix);
     let shim = cmake::Config::new("csrc")
         .profile("Release")
         .define("CMAKE_PREFIX_PATH", prefix.to_string_lossy().as_ref())
+        .define("DEPTHAI_C_NOCV_STUB", if nocv { "ON" } else { "OFF" })
         .build();
     println!("cargo:rustc-link-search=native={}/lib", shim.display());
     // whole-archive: the archive also carries WEAK fallbacks for symbols an
