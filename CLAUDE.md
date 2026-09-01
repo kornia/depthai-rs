@@ -8,7 +8,8 @@ pure-C shim + generated `extern "C"` block) and `depthai` (safe wrapper).
 - **depthai-sys is RAW**: one C function per depthai-core member, named after it
   (`dai_<class>_<member>`); overloads/`std::optional` collapse via sentinels that pick
   the C++ default; `*_get_info` structs are plain copies of getters. No invented
-  members, no policy. The safe crate mirrors depthai-core's own abstractions (node
+  members (one documented exception: `dai_steady_clock_now_ns`, the clock every
+  timestamp is relative to), no policy. The safe crate mirrors depthai-core's own abstractions (node
   graph, typed ports, messages) and nothing else.
 - **No autocxx / bindgen / cxx.** The ABI is `depthai-sys/csrc/depthai_c.h`. Every
   function: `int` return (`DAI_OK`/`DAI_ERR`, polls `1/0/-1`), thread-local
@@ -41,9 +42,9 @@ DEPTHAI_HIT=1 cargo test -p depthai --test hit -- --ignored --test-threads=1   #
 No prefix on the machine? `DEPTHAI_SYS_SKIP_NATIVE=1 cargo test` links an
 error-only stub (check/clippy/unit tests only). Source build:
 `DEPTHAI_CMAKE_EXTRA="-D DEPTHAI_OPENCV_SUPPORT=OFF" bash depthai-sys/scripts/build_depthai.sh`
-(~4 GB free for vcpkg build trees, 30-60 min at -j2). OpenCV OFF leaves three
-symbols undefined in libdepthai-core.so; `csrc/depthai_nocv_stub.cpp` supplies
-weak fallbacks — never patch depthai-core. Hardware tests: `DEPTHAI_HIT=1`.
+(~4 GB free for vcpkg build trees, 30-60 min at -j2). OpenCV OFF leaves
+`ImageFilters`/`Rectification` symbols undefined in libdepthai-core.so;
+`csrc/depthai_nocv_stub.cpp` supplies weak fallbacks — never patch depthai-core. Hardware tests: `DEPTHAI_HIT=1`.
 
 ## Consumers
 

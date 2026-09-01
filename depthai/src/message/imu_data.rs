@@ -5,7 +5,7 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::{Datatype, ImuAccuracy};
-use crate::error::{check, duration_from_ns, fill_vec, Result};
+use crate::error::{duration_from_ns, fill_vec, out_val, Result};
 use crate::message::{AnyMessage, Message, Sealed};
 
 /// A raw `dai::Timestamp { sec, nsec }` on the host `steady_clock`.
@@ -157,14 +157,20 @@ impl Message for ImuData {
 impl ImuData {
     /// Copy the packets out, appending to `out`; returns how many were appended.
     pub fn packets_into(&self, out: &mut Vec<ImuPacket>) -> Result<usize> {
-        // depthai caps maxBatchReports at 5; 8 covers it without a regrow.
-        let raw = fill_vec::<sys::dai_imu_packet>(8, |buf| {
-            let mut n: usize = 0;
-            check(unsafe {
-                sys::dai_imu_data_packets(self.any.raw(), buf.as_mut_ptr(), buf.len(), &mut n)
-            })?;
-            Ok(n)
-        })?;
+        let fill = |buf: &mut [sys::dai_imu_packet]| -> Result<usize> {
+            out_val(|n| unsafe {
+                sys::dai_imu_data_packets(self.any.raw(), buf.as_mut_ptr(), buf.len(), n)
+            })
+        };
+        // depthai caps maxBatchReports at 5, so the common case fits a stack buffer
+        // and allocates nothing; a larger batch takes the growing path.
+        let mut stack = [sys::dai_imu_packet::default(); 8];
+        let n = fill(&mut stack)?;
+        if n <= stack.len() {
+            out.extend(stack[..n].iter().map(ImuPacket::from_raw));
+            return Ok(n);
+        }
+        let raw = fill_vec::<sys::dai_imu_packet>(n, fill)?;
         out.extend(raw.iter().map(ImuPacket::from_raw));
         Ok(raw.len())
     }

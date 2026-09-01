@@ -319,7 +319,9 @@ void dai_string_free(char* s);
 /* depthai-core's build version string (static storage, do not free). */
 const char* dai_build_version(void);
 /* std::chrono::steady_clock::now() in ns since its epoch — the SAME clock every
- * message timestamp below is expressed in. */
+ * message timestamp below is expressed in. The one deliberate non-member here:
+ * Rust cannot read that clock's raw value itself, and every timestamp this ABI
+ * hands out is relative to it. */
 int dai_steady_clock_now_ns(int64_t* out);
 
 /* ------------------------------------------------------------------------- */
@@ -371,6 +373,8 @@ int dai_pipeline_stop(dai_pipeline* p);
 int dai_pipeline_wait(dai_pipeline* p);
 int dai_pipeline_is_running(const dai_pipeline* p, int* out);
 int dai_pipeline_is_built(const dai_pipeline* p, int* out);
+/* Pipeline::remove(node): detach a node (and its links) from an unstarted graph. */
+int dai_pipeline_remove(dai_pipeline* p, dai_node* n);
 int dai_pipeline_create_camera(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_sync(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_stereo_depth(dai_pipeline* p, dai_node** out);

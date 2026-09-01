@@ -262,6 +262,25 @@ static void copy_fixed(char* dst, size_t cap, const std::string& s) {
     dst[n] = '\0';
 }
 
+static dai::DeviceInfo to_dai_info(const dai_device_info& i) {
+    return dai::DeviceInfo(std::string(i.name),
+                           std::string(i.device_id),
+                           (XLinkDeviceState_t)i.state,
+                           (XLinkProtocol_t)i.protocol,
+                           (XLinkPlatform_t)i.platform,
+                           (XLinkError_t)i.status);
+}
+
+static void from_dai_info(const dai::DeviceInfo& i, dai_device_info& o) {
+    std::memset(&o, 0, sizeof(o));
+    copy_fixed(o.name, sizeof(o.name), i.name);
+    copy_fixed(o.device_id, sizeof(o.device_id), i.deviceId);
+    o.state = (int32_t)i.state;
+    o.protocol = (int32_t)i.protocol;
+    o.platform = (int32_t)i.platform;
+    o.status = (int32_t)i.status;
+}
+
 static int64_t steady_ns(std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> t) {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
 }
@@ -312,13 +331,19 @@ static dai_node* wrap_node(std::shared_ptr<dai::Node> p) {
     return new dai_node{std::move(p)};
 }
 
-static void fill_vec_report(dai_imu_vec_report& out, const dai::IMUReport& r, float x, float y, float z) {
+// The IMUReport header shared by every report kind.
+template <class Out>
+static void fill_report_header(Out& out, const dai::IMUReport& r) {
     out.ts_sec = r.timestamp.sec;
     out.ts_nsec = r.timestamp.nsec;
     out.ts_device_sec = r.tsDevice.sec;
     out.ts_device_nsec = r.tsDevice.nsec;
     out.sequence = r.sequence;
     out.accuracy = (int32_t)r.accuracy;
+}
+
+static void fill_vec_report(dai_imu_vec_report& out, const dai::IMUReport& r, float x, float y, float z) {
+    fill_report_header(out, r);
     out.x = x;
     out.y = y;
     out.z = z;
@@ -344,8 +369,10 @@ const char* dai_build_version(void) {
 }
 int dai_steady_clock_now_ns(int64_t* out) {
     DAI_REQUIRE(out, "null out pointer");
-    *out = steady_ns(std::chrono::steady_clock::now());
-    return DAI_OK;
+    DAI_GUARD(dai_steady_clock_now_ns, {
+        *out = steady_ns(std::chrono::steady_clock::now());
+        return DAI_OK;
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -372,12 +399,7 @@ int dai_device_open(const char* name_or_id, int32_t max_usb_speed, dai_device** 
 int dai_device_open_info(const dai_device_info* info, int32_t max_usb_speed, dai_device** out) {
     DAI_REQUIRE(info && out, "null argument");
     DAI_GUARD(dai_device_open_info, {
-        dai::DeviceInfo di(std::string(info->name),
-                           std::string(info->device_id),
-                           (XLinkDeviceState_t)info->state,
-                           (XLinkProtocol_t)info->protocol,
-                           (XLinkPlatform_t)info->platform,
-                           (XLinkError_t)info->status);
+        dai::DeviceInfo di = to_dai_info(*info);
         std::shared_ptr<dai::Device> dev;
         if(max_usb_speed >= 0) {
             dev = std::make_shared<dai::Device>(di, (dai::UsbSpeed)max_usb_speed);
@@ -476,16 +498,7 @@ int dai_device_all_available(dai_device_info* out, size_t cap, size_t* n) {
         auto infos = dai::Device::getAllAvailableDevices();
         *n = infos.size();
         const size_t take = std::min(cap, infos.size());
-        for(size_t i = 0; i < take; ++i) {
-            dai_device_info& o = out[i];
-            std::memset(&o, 0, sizeof(o));
-            copy_fixed(o.name, sizeof(o.name), infos[i].name);
-            copy_fixed(o.device_id, sizeof(o.device_id), infos[i].deviceId);
-            o.state = (int32_t)infos[i].state;
-            o.protocol = (int32_t)infos[i].protocol;
-            o.platform = (int32_t)infos[i].platform;
-            o.status = (int32_t)infos[i].status;
-        }
+        for(size_t i = 0; i < take; ++i) from_dai_info(infos[i], out[i]);
         return DAI_OK;
     })
 }
@@ -496,12 +509,7 @@ int dai_device_all_available(dai_device_info* out, size_t cap, size_t* n) {
 int dai_bootloader_open(const dai_device_info* info, dai_bootloader** out) {
     DAI_REQUIRE(info && out, "null argument");
     DAI_GUARD(dai_bootloader_open, {
-        dai::DeviceInfo di(std::string(info->name),
-                           std::string(info->device_id),
-                           (XLinkDeviceState_t)info->state,
-                           (XLinkProtocol_t)info->protocol,
-                           (XLinkPlatform_t)info->platform,
-                           (XLinkError_t)info->status);
+        dai::DeviceInfo di = to_dai_info(*info);
         *out = new dai_bootloader{std::make_unique<dai::DeviceBootloader>(di)};
         return DAI_OK;
     })
@@ -578,6 +586,14 @@ int dai_pipeline_is_built(const dai_pipeline* p, int* out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_pipeline_is_built, {
         *out = pipeline_of(const_cast<dai_pipeline*>(p)).isBuilt() ? 1 : 0;
+        return DAI_OK;
+    })
+}
+int dai_pipeline_remove(dai_pipeline* p, dai_node* n) {
+    DAI_GUARD(dai_pipeline_remove, {
+        DAI_LOCK_GRAPH;
+        DAI_REQUIRE(n && n->ptr, "null node handle");
+        pipeline_of(p).remove(n->ptr);
         return DAI_OK;
     })
 }
@@ -1134,12 +1150,7 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
             fill_vec_report(o.gyroscope, p.gyroscope, p.gyroscope.x, p.gyroscope.y, p.gyroscope.z);
             fill_vec_report(o.magnetic_field, p.magneticField, p.magneticField.x, p.magneticField.y, p.magneticField.z);
             const auto& rv = p.rotationVector;
-            o.rotation_vector.ts_sec = rv.timestamp.sec;
-            o.rotation_vector.ts_nsec = rv.timestamp.nsec;
-            o.rotation_vector.ts_device_sec = rv.tsDevice.sec;
-            o.rotation_vector.ts_device_nsec = rv.tsDevice.nsec;
-            o.rotation_vector.sequence = rv.sequence;
-            o.rotation_vector.accuracy = (int32_t)rv.accuracy;
+            fill_report_header(o.rotation_vector, rv);
             o.rotation_vector.i = rv.i;
             o.rotation_vector.j = rv.j;
             o.rotation_vector.k = rv.k;
@@ -1154,13 +1165,10 @@ int dai_msg_group_get(const dai_msg* g, const char* name, dai_msg** out) {
     DAI_GUARD(dai_msg_group_get, {
         auto grp = msg_as<dai::MessageGroup>(g, "MessageGroup");
         // MessageGroup::get() uses map operator[] and would insert a null entry
-        // for an unknown name; check membership first.
-        const std::string want(name);
-        const auto names = grp->getMessageNames();
-        if(std::find(names.begin(), names.end(), want) == names.end()) return 0;
-        auto m = grp->get(want);
-        if(!m) return 0;
-        *out = wrap_msg(std::move(m));
+        // for an unknown name; probe the (public) map instead.
+        auto it = grp->group.find(std::string(name));
+        if(it == grp->group.end() || !it->second) return 0;
+        *out = wrap_msg(it->second);
         return 1;
     })
 }

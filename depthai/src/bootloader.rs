@@ -17,8 +17,10 @@ pub struct DeviceBootloader {
     raw: NonNull<sys::dai_bootloader>,
 }
 
-// SAFETY: opaque handle used only through the shim; not Sync (single owner).
+// SAFETY: an opaque handle with no methods besides construction and Drop; the
+// shim is the only code that dereferences it.
 unsafe impl Send for DeviceBootloader {}
+unsafe impl Sync for DeviceBootloader {}
 
 impl DeviceBootloader {
     /// Connect to the bootloader of `info` (from [`Device::all_available`](crate::Device::all_available)).

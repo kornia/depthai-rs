@@ -67,6 +67,7 @@ extern "C" {
     pub fn dai_pipeline_wait(p: *mut dai_pipeline) -> c_int;
     pub fn dai_pipeline_is_running(p: *const dai_pipeline, out: *mut c_int) -> c_int;
     pub fn dai_pipeline_is_built(p: *const dai_pipeline, out: *mut c_int) -> c_int;
+    pub fn dai_pipeline_remove(p: *mut dai_pipeline, n: *mut dai_node) -> c_int;
     pub fn dai_pipeline_create_camera(p: *mut dai_pipeline, out: *mut *mut dai_node) -> c_int;
     pub fn dai_pipeline_create_sync(p: *mut dai_pipeline, out: *mut *mut dai_node) -> c_int;
     pub fn dai_pipeline_create_stereo_depth(p: *mut dai_pipeline, out: *mut *mut dai_node)

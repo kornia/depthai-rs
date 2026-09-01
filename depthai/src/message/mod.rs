@@ -24,7 +24,7 @@ use std::time::Duration;
 use depthai_sys as sys;
 
 use crate::enums::Datatype;
-use crate::error::{bytes, check, duration_from_ns, DepthaiError, Result};
+use crate::error::{bytes, duration_from_ns, out_val, DepthaiError, Result};
 
 /// The `dai::ADatatype` / `dai::Buffer` fields every message carries, read once
 /// when the message is taken off its queue.
@@ -74,9 +74,9 @@ impl AnyMessage {
     /// # Safety
     /// `raw` must be a live handle the caller owns (from a `dai_msg**` out-param).
     pub(crate) unsafe fn from_raw(raw: NonNull<sys::dai_msg>) -> Result<Self> {
-        let mut info = sys::dai_buffer_info::default();
-        // SAFETY: `raw` is live; `info` is a valid out-param.
-        check(unsafe { sys::dai_buffer_get_info(raw.as_ptr(), &mut info) })?;
+        // SAFETY: `raw` is live; the out-param is valid.
+        let info: sys::dai_buffer_info =
+            out_val(|out| unsafe { sys::dai_buffer_get_info(raw.as_ptr(), out) })?;
         let header = MessageHeader {
             datatype: Datatype::from_raw(info.datatype),
             timestamp_ns: info.timestamp_ns,

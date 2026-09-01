@@ -38,6 +38,7 @@ int dai_pipeline_stop(dai_pipeline* p) { return DAI_ERR; }
 int dai_pipeline_wait(dai_pipeline* p) { return DAI_ERR; }
 int dai_pipeline_is_running(const dai_pipeline* p, int* out) { return DAI_ERR; }
 int dai_pipeline_is_built(const dai_pipeline* p, int* out) { return DAI_ERR; }
+int dai_pipeline_remove(dai_pipeline* p, dai_node* n) { return DAI_ERR; }
 int dai_pipeline_create_camera(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
 int dai_pipeline_create_sync(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
 int dai_pipeline_create_stereo_depth(dai_pipeline* p, dai_node** out) { return DAI_ERR; }

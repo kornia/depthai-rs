@@ -72,6 +72,12 @@ impl Pipeline {
         N::create(self)
     }
 
+    /// `Pipeline::remove(node)`: detach a node and its links from the (unstarted)
+    /// graph — e.g. to undo a partially built optional subgraph.
+    pub fn remove(&self, node: &impl crate::node::Node) -> Result<()> {
+        check(unsafe { sys::dai_pipeline_remove(self.raw(), node.handle().raw()) })
+    }
+
     pub fn build(&self) -> Result<()> {
         check(unsafe { sys::dai_pipeline_build(self.raw()) })
     }

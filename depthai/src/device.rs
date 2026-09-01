@@ -11,7 +11,8 @@ use crate::enums::{
     opt_raw, CameraBoardSocket, DeviceState, Platform, UsbSpeed, XLinkPlatform, XLinkProtocol,
 };
 use crate::error::{
-    check, cstring, fill_vec, fixed_string, out_bool, out_handle, out_string, out_val, Result,
+    check, cstring, duration_from_ns, fill_vec, fixed_string, out_bool, out_handle, out_string,
+    out_val, Result,
 };
 
 #[derive(Debug)]
