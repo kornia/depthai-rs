@@ -141,11 +141,16 @@ fn which(bin: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// libusb-1.0 is a DT_NEEDED of libdepthai-core.so provided externally (pixi/conda
-/// env or system). Put its dir on the link search path and the rpath.
-fn find_libusb_dir() -> Option<PathBuf> {
+/// libusb-1.0 is a DT_NEEDED of libdepthai-core.so: bundled in the prefix by the
+/// build script, else from the environment (pkg-config). Put its dir on the link
+/// search path and the rpath.
+fn find_libusb_dir(prefix: &Path) -> Option<PathBuf> {
     if let Some(d) = env("DEPTHAI_LIBUSB_DIR") {
         return Some(PathBuf::from(d));
+    }
+    // scripts/build_depthai.sh bundles vcpkg's libusb into the prefix itself.
+    if prefix.join("lib/libusb-1.0.so").exists() {
+        return Some(prefix.join("lib"));
     }
     let out = Command::new("pkg-config")
         .args(["--variable=libdir", "libusb-1.0"])
@@ -160,6 +165,7 @@ fn find_libusb_dir() -> Option<PathBuf> {
 
 fn build_stub() {
     println!("cargo:warning=depthai-sys: DEPTHAI_SYS_SKIP_NATIVE set — linking the error-only stub, NOT depthai-core");
+    println!("cargo:rpath=");
     cc::Build::new()
         .file("csrc/depthai_c_stub.c")
         .include("csrc")
@@ -173,6 +179,7 @@ fn main() {
     println!("cargo:rerun-if-changed=csrc/depthai_c.h");
     println!("cargo:rerun-if-changed=csrc/depthai_c.cpp");
     println!("cargo:rerun-if-changed=csrc/depthai_c_stub.c");
+    println!("cargo:rerun-if-changed=csrc/depthai_nocv_stub.cpp");
     println!("cargo:rerun-if-changed=csrc/CMakeLists.txt");
 
     if env("DEPTHAI_SYS_SKIP_NATIVE").is_some() {
@@ -197,7 +204,11 @@ fn main() {
         .define("CMAKE_PREFIX_PATH", prefix.to_string_lossy().as_ref())
         .build();
     println!("cargo:rustc-link-search=native={}/lib", shim.display());
-    println!("cargo:rustc-link-lib=static=depthai_c");
+    // whole-archive: the archive also carries WEAK fallbacks for symbols an
+    // OpenCV-less libdepthai-core.so leaves undefined (csrc/depthai_nocv_stub.cpp).
+    // Nothing references them before the shared library is scanned, so they must
+    // be force-included rather than pulled on demand.
+    println!("cargo:rustc-link-lib=static:+whole-archive=depthai_c");
 
     // 2. depthai-core (shared) + the C++ runtime, with an absolute rpath so
     //    binaries find the .so without LD_LIBRARY_PATH.
@@ -207,18 +218,28 @@ fn main() {
     println!("cargo:rustc-link-lib=dylib=stdc++");
 
     // 3. libusb.
-    match find_libusb_dir() {
+    let mut rpath = vec![format!("{}/lib", prefix.display())];
+    match find_libusb_dir(&prefix) {
         Some(usb) => {
+            rpath.push(usb.display().to_string());
             println!("cargo:rustc-link-search=native={}", usb.display());
             println!("cargo:rustc-link-lib=dylib=usb-1.0");
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", usb.display());
+            // libdepthai-core.so's DT_NEEDED names the UNVERSIONED libusb-1.0.so, so the
+            // linker must be able to resolve that transitive dependency here too.
+            println!("cargo:rustc-link-arg=-Wl,-rpath-link,{}", usb.display());
         }
         None => println!(
             "cargo:warning=depthai-sys: libusb-1.0 not found via pkg-config; set DEPTHAI_LIBUSB_DIR if the link fails"
         ),
     }
 
-    // 4. Metadata for dependents (`DEP_DEPTHAI_CORE_PREFIX`, `DEP_DEPTHAI_CORE_INCLUDE`).
+    // 4. Metadata for dependents (`DEP_DEPTHAI_CORE_PREFIX`, `DEP_DEPTHAI_CORE_INCLUDE`,
+    //    `DEP_DEPTHAI_CORE_RPATH`). `rustc-link-arg` above only reaches THIS package's
+    //    targets: a crate that ships binaries/examples/tests must add the rpath itself:
+    //        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", env!("DEP_DEPTHAI_CORE_RPATH"));
+    //    (needs a direct dependency on depthai-sys). Or set LD_LIBRARY_PATH at run time.
     println!("cargo:prefix={}", prefix.display());
     println!("cargo:include={}/include", prefix.display());
+    println!("cargo:rpath={}", rpath.join(":"));
 }

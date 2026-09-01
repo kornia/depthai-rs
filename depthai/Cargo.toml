@@ -10,6 +10,7 @@ description = "Safe Rust wrapper for Luxonis depthai-core v3 (OAK cameras): Devi
 keywords = ["depthai", "luxonis", "oak", "camera", "stereo"]
 categories = ["api-bindings", "computer-vision", "hardware-support"]
 readme = "../README.md"
+build = "build.rs"
 
 [dependencies]
 depthai-sys = { workspace = true }

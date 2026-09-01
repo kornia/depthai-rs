@@ -18,8 +18,29 @@
 #include <utility>
 #include <vector>
 
+// Only the headers this ABI mirrors — NOT the depthai/depthai.hpp umbrella. That
+// umbrella pulls in every node, and some (ImageFilters, Rectification) carry
+// inline code referencing symbols a DEPTHAI_OPENCV_SUPPORT=OFF build never
+// compiles, which surfaces as undefined vtables at link time.
 #include "depthai/build/version.hpp"
-#include "depthai/depthai.hpp"
+#include "depthai/device/CalibrationHandler.hpp"
+#include "depthai/device/Device.hpp"
+#include "depthai/device/DeviceBootloader.hpp"
+#include "depthai/pipeline/MessageQueue.hpp"
+#include "depthai/pipeline/Node.hpp"
+#include "depthai/pipeline/Pipeline.hpp"
+#include "depthai/pipeline/datatype/ADatatype.hpp"
+#include "depthai/pipeline/datatype/Buffer.hpp"
+#include "depthai/pipeline/datatype/EncodedFrame.hpp"
+#include "depthai/pipeline/datatype/IMUData.hpp"
+#include "depthai/pipeline/datatype/ImgFrame.hpp"
+#include "depthai/pipeline/datatype/MessageGroup.hpp"
+#include "depthai/pipeline/datatype/StereoDepthConfig.hpp"
+#include "depthai/pipeline/node/Camera.hpp"
+#include "depthai/pipeline/node/IMU.hpp"
+#include "depthai/pipeline/node/StereoDepth.hpp"
+#include "depthai/pipeline/node/Sync.hpp"
+#include "depthai/pipeline/node/VideoEncoder.hpp"
 
 // ---------------------------------------------------------------------------
 // Enum pins: a depthai-core bump that renumbers an enumerator fails HERE.

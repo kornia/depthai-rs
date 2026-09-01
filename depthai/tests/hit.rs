@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use depthai::node::{Camera, Imu, Sync};
+use depthai::node::{Camera, Imu, Node, StereoDepth, Sync, VideoEncoder};
 use depthai::{
     CameraBoardSocket, Device, ImgFrame, ImgFrameType, ImgResizeMode, ImuSensor, LengthUnit,
     Message, Pipeline,
@@ -151,4 +151,57 @@ fn imu_streams_nonzero_timestamps() {
     }
     assert!(samples > 50, "only {samples} IMU samples");
     pipeline.stop().unwrap();
+}
+
+/// Device nodes cannot be created on a host-only pipeline, so the fixed port
+/// names the wrappers assume are pinned here, against a real device.
+#[test]
+#[ignore]
+fn device_node_port_names_are_what_the_wrappers_assume() {
+    if !gate() {
+        return;
+    }
+    let dev = Device::open(None, None).unwrap();
+    let p = Pipeline::new(&dev).unwrap();
+    let enc = p.create::<VideoEncoder>().unwrap();
+    enc.input().unwrap();
+    enc.bitstream().unwrap();
+    enc.out().unwrap();
+    let sd = p.create::<StereoDepth>().unwrap();
+    for name in ["left", "right", "inputAlignTo"] {
+        assert!(
+            sd.input_by_name(name).unwrap().is_some(),
+            "StereoDepth input {name}"
+        );
+    }
+    for name in [
+        "depth",
+        "disparity",
+        "rectifiedLeft",
+        "rectifiedRight",
+        "syncedLeft",
+        "syncedRight",
+        "confidenceMap",
+    ] {
+        assert!(
+            sd.output_by_name(name).unwrap().is_some(),
+            "StereoDepth output {name}"
+        );
+    }
+    let imu = p.create::<Imu>().unwrap();
+    imu.out().unwrap();
+    assert_eq!(imu.type_name(), "IMU");
+
+    // Node::Output* handed out earlier must still be valid after more requests.
+    let cam = p.create::<Camera>().unwrap();
+    cam.build(CameraBoardSocket::CamA).unwrap();
+    let first = cam
+        .request_output((640, 400), None, ImgResizeMode::Crop, None, None)
+        .unwrap();
+    let name0 = first.name().unwrap();
+    for _ in 0..3 {
+        cam.request_output((320, 200), None, ImgResizeMode::Crop, None, None)
+            .unwrap();
+    }
+    assert_eq!(first.name().unwrap(), name0);
 }

@@ -1,8 +1,10 @@
 //! Graph-construction tests that need depthai-core but NO camera
-//! (`Pipeline::host_only()`). They skip themselves when the crate was built with
-//! `DEPTHAI_SYS_SKIP_NATIVE=1` (every call errors then).
+//! (`Pipeline::host_only()`). Only host-capable nodes (Sync) can be created
+//! there — depthai refuses device nodes on a host-only pipeline, so the device
+//! nodes' port names are pinned in `hit.rs` instead. These skip themselves when
+//! the crate was built with `DEPTHAI_SYS_SKIP_NATIVE=1` (every call errors then).
 
-use depthai::node::{Camera, Imu, Node, StereoDepth, Sync, VideoEncoder};
+use depthai::node::{Node, Sync};
 use depthai::Pipeline;
 
 fn host_pipeline() -> Option<Pipeline> {
@@ -14,58 +16,6 @@ fn host_pipeline() -> Option<Pipeline> {
         }
         Err(e) => panic!("host-only pipeline: {e}"),
     }
-}
-
-#[test]
-fn fixed_port_names_are_what_the_wrappers_assume() {
-    let Some(p) = host_pipeline() else { return };
-    let enc = p.create::<VideoEncoder>().unwrap();
-    assert!(enc
-        .input_names()
-        .unwrap()
-        .iter()
-        .any(|n| n.ends_with("/in")));
-    assert!(enc
-        .output_names()
-        .unwrap()
-        .iter()
-        .any(|n| n.ends_with("/bitstream")));
-    assert!(enc
-        .output_names()
-        .unwrap()
-        .iter()
-        .any(|n| n.ends_with("/out")));
-    enc.input().unwrap();
-    enc.bitstream().unwrap();
-    enc.out().unwrap();
-
-    let sd = p.create::<StereoDepth>().unwrap();
-    for name in ["left", "right", "inputAlignTo"] {
-        assert!(
-            sd.input_by_name(name).unwrap().is_some(),
-            "StereoDepth input {name}"
-        );
-    }
-    for name in [
-        "depth",
-        "disparity",
-        "rectifiedLeft",
-        "rectifiedRight",
-        "syncedLeft",
-        "syncedRight",
-        "confidenceMap",
-    ] {
-        assert!(
-            sd.output_by_name(name).unwrap().is_some(),
-            "StereoDepth output {name}"
-        );
-    }
-
-    let imu = p.create::<Imu>().unwrap();
-    imu.out().unwrap();
-
-    let sync = p.create::<Sync>().unwrap();
-    sync.out().unwrap();
 }
 
 #[test]
@@ -82,30 +32,16 @@ fn sync_input_map_is_get_or_create_and_stable() {
 }
 
 #[test]
-fn camera_outputs_survive_later_requests() {
-    let Some(p) = host_pipeline() else { return };
-    let cam = p.create::<Camera>().unwrap();
-    if cam.build(depthai::CameraBoardSocket::CamA).is_err() {
-        eprintln!("Camera::build needs a device in this depthai version; skipping");
-        return;
-    }
-    let first = cam
-        .request_output((640, 400), None, depthai::ImgResizeMode::Crop, None, None)
-        .unwrap();
-    let name0 = first.name().unwrap();
-    for _ in 0..3 {
-        cam.request_output((320, 200), None, depthai::ImgResizeMode::Crop, None, None)
-            .unwrap();
-    }
-    // Node::Output* handed out earlier must still be valid after more requests.
-    assert_eq!(first.name().unwrap(), name0);
-}
-
-#[test]
 fn unknown_port_is_none_not_error() {
     let Some(p) = host_pipeline() else { return };
-    let imu = p.create::<Imu>().unwrap();
-    assert!(imu.output_by_name("nope").unwrap().is_none());
-    assert!(imu.input_by_name("nope").unwrap().is_none());
-    assert_eq!(imu.type_name(), "IMU");
+    // Only host-capable nodes exist without a device; Sync is one.
+    let sync = p.create::<Sync>().unwrap();
+    assert!(sync.output_by_name("nope").unwrap().is_none());
+    assert!(sync.input_by_name("nope").unwrap().is_none());
+    assert_eq!(sync.type_name(), "Sync");
+    assert!(sync
+        .output_names()
+        .unwrap()
+        .iter()
+        .any(|n| n.ends_with("/out")));
 }

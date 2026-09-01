@@ -66,6 +66,16 @@ jobs="${DEPTHAI_JOBS:-$(( mem_gb >= 16 ? 4 : 2 ))}"
 echo "[depthai] building (-j $jobs; ${mem_gb}GB RAM detected) ..."
 cmake --build "$SRC/build" --target install -j "$jobs"
 
+# depthai-core links the libusb that vcpkg built (overlay port) but does not install
+# it; its DT_NEEDED names the unversioned libusb-1.0.so. Ship it in the prefix so the
+# prefix is self-contained (no patch: a copy after install).
+for triplet in "$SRC"/build/vcpkg_installed/*/lib; do
+    if ls "$triplet"/libusb-1.0.so* >/dev/null 2>&1; then
+        cp -a "$triplet"/libusb-1.0.so* "$PREFIX/lib/"
+        echo "[depthai] bundled libusb from $triplet"
+    fi
+done
+
 echo "$WANT" > "$STAMP"
 echo "[depthai] installed to $PREFIX"
 ls -la "$PREFIX/lib" 2>/dev/null | grep -i depthai || true
