@@ -710,6 +710,19 @@ DAI_CREATE_NODE(dai_pipeline_create_stereo_depth, dai::node::StereoDepth)
 DAI_CREATE_NODE(dai_pipeline_create_video_encoder, dai::node::VideoEncoder)
 DAI_CREATE_NODE(dai_pipeline_create_imu, dai::node::IMU)
 DAI_CREATE_NODE(dai_pipeline_create_gate, dai::node::Gate)
+#define DAI_GATE(fn, expr)                                      \
+    DAI_GUARD(fn, {                                             \
+        DAI_LOCK_GRAPH;                                         \
+        auto gate = node_as<dai::node::Gate>(g, "Gate");        \
+        expr;                                                   \
+        return DAI_OK;                                          \
+    })
+int dai_gate_set_run_on_host(dai_node* g, int run_on_host) {
+    DAI_GATE(dai_gate_set_run_on_host, gate->setRunOnHost(run_on_host != 0))
+}
+int dai_gate_set_initial_config(dai_node* g, const dai_msg* control) {
+    DAI_GATE(dai_gate_set_initial_config, gate->initialConfig = msg_as<dai::GateControl>(control, "GateControl"))
+}
 DAI_CREATE_NODE(dai_pipeline_create_neural_network, dai::node::NeuralNetwork)
 DAI_CREATE_NODE(dai_pipeline_create_detection_network, dai::node::DetectionNetwork)
 
@@ -1018,20 +1031,6 @@ int dai_video_encoder_set_lossless(dai_node* e, int lossless) {
 // ---------------------------------------------------------------------------
 // Gate
 // ---------------------------------------------------------------------------
-int dai_gate_set_run_on_host(dai_node* g, int run_on_host) {
-    DAI_GUARD(dai_gate_set_run_on_host, {
-        DAI_LOCK_GRAPH;
-        node_as<dai::node::Gate>(g, "Gate")->setRunOnHost(run_on_host != 0);
-        return DAI_OK;
-    })
-}
-int dai_gate_set_initial_config(dai_node* g, const dai_msg* control) {
-    DAI_GUARD(dai_gate_set_initial_config, {
-        DAI_LOCK_GRAPH;
-        node_as<dai::node::Gate>(g, "Gate")->initialConfig = msg_as<dai::GateControl>(control, "GateControl");
-        return DAI_OK;
-    })
-}
 
 // ---------------------------------------------------------------------------
 // InputQueue (host -> device)
