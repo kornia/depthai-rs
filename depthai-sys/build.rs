@@ -90,8 +90,10 @@ fn build_vendored() -> PathBuf {
     let src = manifest_dir().join("vendor/depthai-core");
     if !src.join("CMakeLists.txt").exists() {
         panic!(
-            "depthai-sys[vendored]: {} is empty. Run `git submodule update --init --recursive` \
-             in the depthai-rs checkout (build scripts never run git).",
+            "depthai-sys[vendored]: {} is empty (build scripts never run git). In a depthai-rs \
+             checkout run `git submodule update --init --recursive`; as a cargo git dependency \
+             set CARGO_NET_GIT_FETCH_WITH_CLI=true so cargo fetches the submodule, then \
+             `cargo clean -p depthai-sys` and rebuild.",
             src.display()
         );
     }
