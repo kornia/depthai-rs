@@ -1,4 +1,5 @@
-//! [`OutputQueue`]: the host side of a node output.
+//! [`OutputQueue`]: the host side of a node output; [`InputQueue`]: the host side
+//! of a node input (messages sent INTO the pipeline).
 
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -131,5 +132,52 @@ impl<M: Message> OutputQueue<M> {
 
     pub fn name(&self) -> Result<String> {
         out_string(|p| unsafe { sys::dai_queue_name(self.raw(), p) })
+    }
+}
+
+#[derive(Debug)]
+struct InputQueueInner {
+    raw: NonNull<sys::dai_input_queue>,
+    /// Keeps the node, pipeline and device alive.
+    node: NodeHandle,
+}
+
+// SAFETY: InputQueue::send hands the message to a host ThreadedNode whose own
+// queue is mutex-guarded; the handle is a shared_ptr copy.
+unsafe impl Send for InputQueueInner {}
+unsafe impl Sync for InputQueueInner {}
+
+impl Drop for InputQueueInner {
+    fn drop(&mut self) {
+        unsafe { sys::dai_input_queue_release(self.raw.as_ptr()) };
+    }
+}
+
+/// A host queue that sends messages INTO a node input
+/// (`Input::createInputQueue`), e.g. [`GateControl`](crate::GateControl)s into
+/// a [`Gate`](crate::node::Gate) or `CameraControl`s into a camera. Create it
+/// before [`Pipeline::start`](crate::Pipeline::start) (it is a host node of the
+/// graph); send any time after.
+#[derive(Clone, Debug)]
+pub struct InputQueue {
+    inner: Arc<InputQueueInner>,
+}
+
+impl InputQueue {
+    /// # Safety
+    /// `raw` must be a live handle from `dai_input_create_queue` on a port of `node`.
+    pub(crate) unsafe fn from_raw(raw: NonNull<sys::dai_input_queue>, node: NodeHandle) -> Self {
+        InputQueue {
+            inner: Arc::new(InputQueueInner { raw, node }),
+        }
+    }
+
+    /// `InputQueue::send(msg)`.
+    pub fn send(&self, msg: &impl Message) -> Result<()> {
+        check(unsafe { sys::dai_input_queue_send(self.inner.raw.as_ptr(), msg.as_any().raw()) })
+    }
+
+    pub fn node(&self) -> &NodeHandle {
+        &self.inner.node
     }
 }

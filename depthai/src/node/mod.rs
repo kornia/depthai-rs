@@ -3,12 +3,14 @@
 //! node shares (identity, port introspection, port lookup by name).
 
 mod camera;
+mod gate;
 mod imu;
 mod stereo_depth;
 mod sync;
 mod video_encoder;
 
 pub use camera::Camera;
+pub use gate::Gate;
 pub use imu::Imu;
 pub use stereo_depth::{PostProcessing, StereoDepth};
 pub use sync::Sync;

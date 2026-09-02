@@ -45,6 +45,7 @@ opaque!(
     dai_output,
     dai_input,
     dai_queue,
+    dai_input_queue,
     dai_msg,
     dai_calib,
     dai_bootloader
@@ -90,6 +91,7 @@ pub const DAI_DT_ADATATYPE: i32 = 0;
 pub const DAI_DT_BUFFER: i32 = 1;
 pub const DAI_DT_IMG_FRAME: i32 = 2;
 pub const DAI_DT_ENCODED_FRAME: i32 = 3;
+pub const DAI_DT_GATE_CONTROL: i32 = 5;
 pub const DAI_DT_IMU_DATA: i32 = 19;
 pub const DAI_DT_MESSAGE_GROUP: i32 = 28;
 

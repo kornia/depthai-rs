@@ -5,8 +5,8 @@ use std::os::raw::{c_char, c_int};
 
 use crate::{
     dai_bootloader, dai_buffer_info, dai_calib, dai_device, dai_device_info,
-    dai_encoded_frame_info, dai_img_frame_info, dai_imu_packet, dai_input, dai_msg, dai_node,
-    dai_output, dai_pipeline, dai_queue,
+    dai_encoded_frame_info, dai_img_frame_info, dai_imu_packet, dai_input, dai_input_queue,
+    dai_msg, dai_node, dai_output, dai_pipeline, dai_queue,
 };
 
 extern "C" {
@@ -77,6 +77,7 @@ extern "C" {
         out: *mut *mut dai_node,
     ) -> c_int;
     pub fn dai_pipeline_create_imu(p: *mut dai_pipeline, out: *mut *mut dai_node) -> c_int;
+    pub fn dai_pipeline_create_gate(p: *mut dai_pipeline, out: *mut *mut dai_node) -> c_int;
     pub fn dai_node_release(n: *mut dai_node);
     pub fn dai_node_id(n: *const dai_node, out: *mut i64) -> c_int;
     pub fn dai_node_type_name(n: *const dai_node, out: *mut *const c_char) -> c_int;
@@ -102,6 +103,12 @@ extern "C" {
         max_size: u32,
         blocking: c_int,
         out: *mut *mut dai_queue,
+    ) -> c_int;
+    pub fn dai_input_create_queue(
+        i: *mut dai_input,
+        max_size: u32,
+        blocking: c_int,
+        out: *mut *mut dai_input_queue,
     ) -> c_int;
     pub fn dai_input_set_blocking(i: *mut dai_input, blocking: c_int) -> c_int;
     pub fn dai_input_set_max_size(i: *mut dai_input, max_size: u32) -> c_int;
@@ -164,6 +171,7 @@ extern "C" {
     pub fn dai_video_encoder_set_num_bframes(e: *mut dai_node, n: i32) -> c_int;
     pub fn dai_video_encoder_set_quality(e: *mut dai_node, quality: i32) -> c_int;
     pub fn dai_video_encoder_set_lossless(e: *mut dai_node, lossless: c_int) -> c_int;
+    pub fn dai_gate_set_run_on_host(g: *mut dai_node, run_on_host: c_int) -> c_int;
     pub fn dai_imu_enable_sensor(imu: *mut dai_node, sensor: i32, report_rate_hz: u32) -> c_int;
     pub fn dai_imu_set_batch_report_threshold(imu: *mut dai_node, n: i32) -> c_int;
     pub fn dai_imu_set_max_batch_reports(imu: *mut dai_node, n: i32) -> c_int;
@@ -177,6 +185,8 @@ extern "C" {
     pub fn dai_queue_set_blocking(q: *mut dai_queue, blocking: c_int) -> c_int;
     pub fn dai_queue_set_max_size(q: *mut dai_queue, max_size: u32) -> c_int;
     pub fn dai_queue_name(q: *mut dai_queue, out: *mut *mut c_char) -> c_int;
+    pub fn dai_input_queue_release(q: *mut dai_input_queue);
+    pub fn dai_input_queue_send(q: *mut dai_input_queue, m: *const dai_msg) -> c_int;
     pub fn dai_msg_release(m: *mut dai_msg);
     pub fn dai_msg_clone(m: *const dai_msg, out: *mut *mut dai_msg) -> c_int;
     pub fn dai_msg_datatype(m: *const dai_msg, out: *mut i32) -> c_int;
@@ -195,6 +205,12 @@ extern "C" {
         out: *mut dai_imu_packet,
         cap: usize,
         n: *mut usize,
+    ) -> c_int;
+    pub fn dai_gate_control_new(
+        open: c_int,
+        num_messages: i32,
+        fps: i32,
+        out: *mut *mut dai_msg,
     ) -> c_int;
     pub fn dai_msg_group_get(
         g: *const dai_msg,

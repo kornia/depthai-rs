@@ -32,12 +32,15 @@
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/datatype/ADatatype.hpp"
 #include "depthai/pipeline/datatype/Buffer.hpp"
+#include "depthai/pipeline/InputQueue.hpp"
 #include "depthai/pipeline/datatype/EncodedFrame.hpp"
+#include "depthai/pipeline/datatype/GateControl.hpp"
 #include "depthai/pipeline/datatype/IMUData.hpp"
 #include "depthai/pipeline/datatype/ImgFrame.hpp"
 #include "depthai/pipeline/datatype/MessageGroup.hpp"
 #include "depthai/pipeline/datatype/StereoDepthConfig.hpp"
 #include "depthai/pipeline/node/Camera.hpp"
+#include "depthai/pipeline/node/Gate.hpp"
 #include "depthai/pipeline/node/IMU.hpp"
 #include "depthai/pipeline/node/StereoDepth.hpp"
 #include "depthai/pipeline/node/Sync.hpp"
@@ -85,6 +88,7 @@ DAI_PIN(dai::DatatypeEnum::ADatatype, DAI_DT_ADATATYPE);
 DAI_PIN(dai::DatatypeEnum::Buffer, DAI_DT_BUFFER);
 DAI_PIN(dai::DatatypeEnum::ImgFrame, DAI_DT_IMG_FRAME);
 DAI_PIN(dai::DatatypeEnum::EncodedFrame, DAI_DT_ENCODED_FRAME);
+DAI_PIN(dai::DatatypeEnum::GateControl, DAI_DT_GATE_CONTROL);
 DAI_PIN(dai::DatatypeEnum::IMUData, DAI_DT_IMU_DATA);
 DAI_PIN(dai::DatatypeEnum::MessageGroup, DAI_DT_MESSAGE_GROUP);
 
@@ -188,6 +192,9 @@ struct dai_queue {
 };
 struct dai_msg {
     std::shared_ptr<dai::ADatatype> ptr;
+};
+struct dai_input_queue {
+    std::shared_ptr<dai::InputQueue> ptr;
 };
 struct dai_calib {
     dai::CalibrationHandler handler;
@@ -613,6 +620,7 @@ DAI_CREATE_NODE(dai_pipeline_create_sync, dai::node::Sync)
 DAI_CREATE_NODE(dai_pipeline_create_stereo_depth, dai::node::StereoDepth)
 DAI_CREATE_NODE(dai_pipeline_create_video_encoder, dai::node::VideoEncoder)
 DAI_CREATE_NODE(dai_pipeline_create_imu, dai::node::IMU)
+DAI_CREATE_NODE(dai_pipeline_create_gate, dai::node::Gate)
 
 // ---------------------------------------------------------------------------
 // Node (common)
@@ -715,6 +723,14 @@ int dai_output_create_queue(dai_output* o, uint32_t max_size, int blocking, dai_
     DAI_GUARD(dai_output_create_queue, {
         DAI_LOCK_GRAPH;
         *out = new dai_queue{as_output(o)->createOutputQueue(max_size, blocking != 0)};
+        return DAI_OK;
+    })
+}
+int dai_input_create_queue(dai_input* i, uint32_t max_size, int blocking, dai_input_queue** out) {
+    DAI_REQUIRE(i && out, "null argument");
+    DAI_GUARD(dai_input_create_queue, {
+        DAI_LOCK_GRAPH;
+        *out = new dai_input_queue{as_input(i)->createInputQueue(max_size, blocking != 0)};
         return DAI_OK;
     })
 }
@@ -914,6 +930,32 @@ int dai_video_encoder_set_quality(dai_node* e, int32_t quality) {
 }
 int dai_video_encoder_set_lossless(dai_node* e, int lossless) {
     DAI_VENC(dai_video_encoder_set_lossless, ve->setLossless(lossless != 0))
+}
+
+// ---------------------------------------------------------------------------
+// Gate
+// ---------------------------------------------------------------------------
+int dai_gate_set_run_on_host(dai_node* g, int run_on_host) {
+    DAI_GUARD(dai_gate_set_run_on_host, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::Gate>(g, "Gate")->setRunOnHost(run_on_host != 0);
+        return DAI_OK;
+    })
+}
+
+// ---------------------------------------------------------------------------
+// InputQueue (host -> device)
+// ---------------------------------------------------------------------------
+void dai_input_queue_release(dai_input_queue* q) {
+    delete q;
+}
+int dai_input_queue_send(dai_input_queue* q, const dai_msg* m) {
+    DAI_GUARD(dai_input_queue_send, {
+        DAI_REQUIRE(q && q->ptr, "null input queue handle");
+        DAI_REQUIRE(m && m->ptr, "null message handle");
+        q->ptr->send(m->ptr);
+        return DAI_OK;
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1165,6 +1207,13 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
             o.rotation_vector.real = rv.real;
             o.rotation_vector.accuracy_rad = rv.rotationVectorAccuracy;
         }
+        return DAI_OK;
+    })
+}
+int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_gate_control_new, {
+        *out = wrap_msg(std::make_shared<dai::GateControl>(open != 0, (int)num_messages, (int)fps));
         return DAI_OK;
     })
 }

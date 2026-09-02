@@ -3,7 +3,7 @@
 //! A faithful, unopinionated wrapper shaped like depthai's own node-graph API:
 //! open a [`Device`], build a [`Pipeline`] of nodes ([`Camera`](node::Camera),
 //! [`Sync`](node::Sync), [`StereoDepth`](node::StereoDepth),
-//! [`VideoEncoder`](node::VideoEncoder), [`Imu`](node::Imu)), link
+//! [`VideoEncoder`](node::VideoEncoder), [`Imu`](node::Imu), [`Gate`](node::Gate)), link
 //! [`Output`]s to [`Input`]s, create [`OutputQueue`]s, start, and pull typed
 //! messages ([`ImgFrame`], [`MessageGroup`], [`ImuData`], [`EncodedFrame`]).
 //!
@@ -76,13 +76,13 @@ pub use device::{build_version, steady_now, Device, DeviceInfo};
 pub use enums::*;
 pub use error::{DepthaiError, Result};
 pub use message::{
-    AnyMessage, EncodedFrame, EncodedFrameInfo, ImgFrame, ImgFrameInfo, ImuData, ImuPacket,
-    ImuRotationVector, ImuVecReport, Message, MessageGroup, MessageHeader, RawTimestamp,
+    AnyMessage, EncodedFrame, EncodedFrameInfo, GateControl, ImgFrame, ImgFrameInfo, ImuData,
+    ImuPacket, ImuRotationVector, ImuVecReport, Message, MessageGroup, MessageHeader, RawTimestamp,
 };
 pub use node::{Node, NodeHandle, NodeType};
 pub use pipeline::Pipeline;
 pub use port::{Input, Output};
-pub use queue::OutputQueue;
+pub use queue::{InputQueue, OutputQueue};
 
 /// The depthai-core tag the constants in this crate are pinned against.
 pub const DEPTHAI_CORE_TAG: &str = depthai_sys::DEPTHAI_CORE_TAG;

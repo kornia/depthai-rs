@@ -199,3 +199,59 @@ fn device_node_port_names_are_what_the_wrappers_assume() {
     }
     assert_eq!(first.name().unwrap(), name0);
 }
+
+/// The Gate valve: closed → no frames reach the host; open → frames flow again.
+#[test]
+#[ignore]
+fn gate_closes_and_opens_a_stream() {
+    if !gate() {
+        return;
+    }
+    use depthai::node::Gate;
+    use depthai::GateControl;
+    let dev = Device::open(None, None).unwrap();
+    let pipeline = Pipeline::new(&dev).unwrap();
+    let cam = pipeline.create::<Camera>().unwrap();
+    cam.build(CameraBoardSocket::CamA).unwrap();
+    let out = cam
+        .request_output(
+            (320, 240),
+            Some(ImgFrameType::Nv12),
+            ImgResizeMode::Crop,
+            Some(30.0),
+            None,
+        )
+        .unwrap();
+    let g = pipeline.create::<Gate>().unwrap();
+    out.link(&g.input().unwrap()).unwrap();
+    let q = g
+        .output()
+        .unwrap()
+        .cast::<ImgFrame>()
+        .create_output_queue(4, false)
+        .unwrap();
+    let ctl = g
+        .input_control()
+        .unwrap()
+        .create_input_queue(4, false)
+        .unwrap();
+    pipeline.start().unwrap();
+    assert!(
+        q.get(Duration::from_secs(3)).unwrap().is_some(),
+        "open gate delivers"
+    );
+    ctl.send(&GateControl::close().unwrap()).unwrap();
+    while q.try_get().unwrap().is_some() {}
+    std::thread::sleep(Duration::from_millis(500));
+    while q.try_get().unwrap().is_some() {}
+    assert!(
+        q.get(Duration::from_secs(1)).unwrap().is_none(),
+        "closed gate delivers nothing"
+    );
+    ctl.send(&GateControl::open().unwrap()).unwrap();
+    assert!(
+        q.get(Duration::from_secs(3)).unwrap().is_some(),
+        "reopened gate delivers"
+    );
+    pipeline.stop().unwrap();
+}

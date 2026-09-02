@@ -52,6 +52,7 @@ typedef struct dai_node dai_node;             /* heap std::shared_ptr<dai::Node>
 typedef struct dai_output dai_output;         /* == dai::Node::Output* (non-owning)      */
 typedef struct dai_input dai_input;           /* == dai::Node::Input*  (non-owning)      */
 typedef struct dai_queue dai_queue;           /* heap std::shared_ptr<dai::MessageQueue> */
+typedef struct dai_input_queue dai_input_queue; /* heap std::shared_ptr<dai::InputQueue> */
 typedef struct dai_msg dai_msg;               /* heap std::shared_ptr<dai::ADatatype>    */
 typedef struct dai_calib dai_calib;           /* heap dai::CalibrationHandler (copy)     */
 typedef struct dai_bootloader dai_bootloader; /* heap dai::DeviceBootloader              */
@@ -106,6 +107,7 @@ enum {
     DAI_DT_BUFFER = 1,
     DAI_DT_IMG_FRAME = 2,
     DAI_DT_ENCODED_FRAME = 3,
+    DAI_DT_GATE_CONTROL = 5,
     DAI_DT_IMU_DATA = 19,
     DAI_DT_MESSAGE_GROUP = 28,
 };
@@ -380,6 +382,7 @@ int dai_pipeline_create_sync(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_stereo_depth(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_video_encoder(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_imu(dai_pipeline* p, dai_node** out);
+int dai_pipeline_create_gate(dai_pipeline* p, dai_node** out);
 
 /* ------------------------------------------------------------------------- */
 /* Node (common)                                                              */
@@ -401,6 +404,9 @@ int dai_output_name(dai_output* o, char** out);
 int dai_output_link(dai_output* o, dai_input* i);
 int dai_output_unlink(dai_output* o, dai_input* i);
 int dai_output_create_queue(dai_output* o, uint32_t max_size, int blocking, dai_queue** out);
+/* Input::createInputQueue(maxSize, blocking): a host-side queue that sends
+ * messages INTO this input (host -> device). */
+int dai_input_create_queue(dai_input* i, uint32_t max_size, int blocking, dai_input_queue** out);
 int dai_input_set_blocking(dai_input* i, int blocking);
 int dai_input_set_max_size(dai_input* i, uint32_t max_size);
 
@@ -459,6 +465,12 @@ int dai_video_encoder_set_quality(dai_node* e, int32_t quality);
 int dai_video_encoder_set_lossless(dai_node* e, int lossless);
 
 /* ------------------------------------------------------------------------- */
+/* Gate                                                                       */
+/* ------------------------------------------------------------------------- */
+int dai_gate_set_run_on_host(dai_node* g, int run_on_host);
+/* ports: input "input", "inputControl" (GateControl); output "output" */
+
+/* ------------------------------------------------------------------------- */
 /* IMU                                                                        */
 /* ------------------------------------------------------------------------- */
 int dai_imu_enable_sensor(dai_node* imu, int32_t sensor, uint32_t report_rate_hz);
@@ -484,6 +496,13 @@ int dai_queue_set_max_size(dai_queue* q, uint32_t max_size);
 int dai_queue_name(dai_queue* q, char** out);
 
 /* ------------------------------------------------------------------------- */
+/* InputQueue (host -> device)                                                */
+/* ------------------------------------------------------------------------- */
+void dai_input_queue_release(dai_input_queue* q);
+/* InputQueue::send(msg). */
+int dai_input_queue_send(dai_input_queue* q, const dai_msg* m);
+
+/* ------------------------------------------------------------------------- */
 /* Messages                                                                   */
 /* ------------------------------------------------------------------------- */
 void dai_msg_release(dai_msg* m);
@@ -506,6 +525,9 @@ int dai_img_frame_plane_height(const dai_msg* m, uint32_t* out);
 int dai_encoded_frame_get_info(const dai_msg* m, dai_encoded_frame_info* out);
 /* IMUData: writes up to `cap` packets; `*n` = total packet count. */
 int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size_t* n);
+/* GateControl(open, numMessages, fps): a new control message. `num_messages` < 0
+ * = unlimited, `fps` < 0 = unthrottled (dai::GateControl's own defaults). */
+int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out);
 /* MessageGroup */
 int dai_msg_group_get(const dai_msg* g, const char* name, dai_msg** out); /* 1 / 0 absent / -1 */
 int dai_msg_group_num_messages(const dai_msg* g, int64_t* out);

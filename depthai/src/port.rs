@@ -9,7 +9,7 @@ use depthai_sys as sys;
 use crate::error::{check, out_handle, out_string, Result};
 use crate::message::Message;
 use crate::node::NodeHandle;
-use crate::queue::OutputQueue;
+use crate::queue::{InputQueue, OutputQueue};
 
 /// A node output, typed by the message it emits. Holds a reference to its node,
 /// so it can never outlive the port it points at.
@@ -103,6 +103,16 @@ impl Input {
 
     pub(crate) fn raw(&self) -> *mut sys::dai_input {
         self.raw.as_ptr()
+    }
+
+    /// `Input::createInputQueue(maxSize, blocking)`: a host queue that sends
+    /// messages into this input. Create before `Pipeline::start`.
+    pub fn create_input_queue(&self, max_size: u32, blocking: bool) -> Result<InputQueue> {
+        let raw = out_handle(|out| unsafe {
+            sys::dai_input_create_queue(self.raw(), max_size, blocking as i32, out)
+        })?;
+        // SAFETY: fresh owned handle on a port of `self.node`.
+        Ok(unsafe { InputQueue::from_raw(raw, self.node.clone()) })
     }
 
     pub fn set_blocking(&self, blocking: bool) -> Result<()> {

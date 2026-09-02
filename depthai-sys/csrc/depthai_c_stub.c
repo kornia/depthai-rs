@@ -44,6 +44,7 @@ int dai_pipeline_create_sync(dai_pipeline* p, dai_node** out) { return DAI_ERR; 
 int dai_pipeline_create_stereo_depth(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
 int dai_pipeline_create_video_encoder(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
 int dai_pipeline_create_imu(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
+int dai_pipeline_create_gate(dai_pipeline* p, dai_node** out) { return DAI_ERR; }
 void dai_node_release(dai_node* n) {}
 int dai_node_id(const dai_node* n, int64_t* out) { return DAI_ERR; }
 int dai_node_type_name(const dai_node* n, const char** out) { return DAI_ERR; }
@@ -55,6 +56,7 @@ int dai_output_name(dai_output* o, char** out) { return DAI_ERR; }
 int dai_output_link(dai_output* o, dai_input* i) { return DAI_ERR; }
 int dai_output_unlink(dai_output* o, dai_input* i) { return DAI_ERR; }
 int dai_output_create_queue(dai_output* o, uint32_t max_size, int blocking, dai_queue** out) { return DAI_ERR; }
+int dai_input_create_queue(dai_input* i, uint32_t max_size, int blocking, dai_input_queue** out) { return DAI_ERR; }
 int dai_input_set_blocking(dai_input* i, int blocking) { return DAI_ERR; }
 int dai_input_set_max_size(dai_input* i, uint32_t max_size) { return DAI_ERR; }
 int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t sensor_h, float sensor_fps) { return DAI_ERR; }
@@ -86,6 +88,7 @@ int dai_video_encoder_set_rate_control_mode(dai_node* e, int32_t mode) { return 
 int dai_video_encoder_set_num_bframes(dai_node* e, int32_t n) { return DAI_ERR; }
 int dai_video_encoder_set_quality(dai_node* e, int32_t quality) { return DAI_ERR; }
 int dai_video_encoder_set_lossless(dai_node* e, int lossless) { return DAI_ERR; }
+int dai_gate_set_run_on_host(dai_node* g, int run_on_host) { return DAI_ERR; }
 int dai_imu_enable_sensor(dai_node* imu, int32_t sensor, uint32_t report_rate_hz) { return DAI_ERR; }
 int dai_imu_set_batch_report_threshold(dai_node* imu, int32_t n) { return DAI_ERR; }
 int dai_imu_set_max_batch_reports(dai_node* imu, int32_t n) { return DAI_ERR; }
@@ -99,6 +102,8 @@ int dai_queue_is_closed(dai_queue* q, int* out) { return DAI_ERR; }
 int dai_queue_set_blocking(dai_queue* q, int blocking) { return DAI_ERR; }
 int dai_queue_set_max_size(dai_queue* q, uint32_t max_size) { return DAI_ERR; }
 int dai_queue_name(dai_queue* q, char** out) { return DAI_ERR; }
+void dai_input_queue_release(dai_input_queue* q) {}
+int dai_input_queue_send(dai_input_queue* q, const dai_msg* m) { return DAI_ERR; }
 void dai_msg_release(dai_msg* m) {}
 int dai_msg_clone(const dai_msg* m, dai_msg** out) { return DAI_ERR; }
 int dai_msg_datatype(const dai_msg* m, int32_t* out) { return DAI_ERR; }
@@ -112,6 +117,7 @@ int dai_img_frame_plane_stride(const dai_msg* m, int32_t plane, uint32_t* out) {
 int dai_img_frame_plane_height(const dai_msg* m, uint32_t* out) { return DAI_ERR; }
 int dai_encoded_frame_get_info(const dai_msg* m, dai_encoded_frame_info* out) { return DAI_ERR; }
 int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size_t* n) { return DAI_ERR; }
+int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out) { return DAI_ERR; }
 int dai_msg_group_get(const dai_msg* g, const char* name, dai_msg** out) { return DAI_ERR; }
 int dai_msg_group_num_messages(const dai_msg* g, int64_t* out) { return DAI_ERR; }
 int dai_msg_group_names(const dai_msg* g, char** out) { return DAI_ERR; }

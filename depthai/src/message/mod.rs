@@ -8,11 +8,13 @@
 //! valid until the last clone drops.
 
 mod encoded_frame;
+mod gate_control;
 mod img_frame;
 mod imu_data;
 mod message_group;
 
 pub use encoded_frame::{EncodedFrame, EncodedFrameInfo};
+pub use gate_control::GateControl;
 pub use img_frame::{ImgFrame, ImgFrameInfo};
 pub use imu_data::{ImuData, ImuPacket, ImuRotationVector, ImuVecReport, RawTimestamp};
 pub use message_group::MessageGroup;
@@ -129,8 +131,8 @@ mod sealed {
 }
 
 /// A message type a queue or group can be typed as. Implemented by
-/// [`ImgFrame`], [`EncodedFrame`], [`ImuData`], [`MessageGroup`] and
-/// [`AnyMessage`]; sealed.
+/// [`ImgFrame`], [`EncodedFrame`], [`ImuData`], [`MessageGroup`], [`GateControl`]
+/// and [`AnyMessage`]; sealed.
 pub trait Message:
     sealed::Sealed + Clone + std::fmt::Debug + Send + Sync + Sized + 'static
 {

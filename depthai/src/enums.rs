@@ -123,6 +123,7 @@ dai_enum! {
         Buffer = DAI_DT_BUFFER,
         ImgFrame = DAI_DT_IMG_FRAME,
         EncodedFrame = DAI_DT_ENCODED_FRAME,
+        GateControl = DAI_DT_GATE_CONTROL,
         ImuData = DAI_DT_IMU_DATA,
         MessageGroup = DAI_DT_MESSAGE_GROUP,
     }
