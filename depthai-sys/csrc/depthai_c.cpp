@@ -1055,11 +1055,11 @@ int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn
         return DAI_OK;
     })
 }
-int dai_neural_network_build_output(dai_node* nn, dai_output* input, const dai_nn_archive* archive) {
-    DAI_REQUIRE(input, "null output port");
+int dai_neural_network_build_output(dai_node* nn, dai_output* output, const dai_nn_archive* archive) {
+    DAI_REQUIRE(output, "null output port");
     DAI_GUARD(dai_neural_network_build_output, {
         DAI_LOCK_GRAPH;
-        node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork")->build(*as_output(input), archive_of(archive));
+        node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork")->build(*as_output(output), archive_of(archive));
         return DAI_OK;
     })
 }
@@ -1101,11 +1101,11 @@ int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai
         return DAI_OK;
     })
 }
-int dai_detection_network_build_output(dai_node* dn, dai_output* input, const dai_nn_archive* archive) {
-    DAI_REQUIRE(input, "null output port");
+int dai_detection_network_build_output(dai_node* dn, dai_output* output, const dai_nn_archive* archive) {
+    DAI_REQUIRE(output, "null output port");
     DAI_GUARD(dai_detection_network_build_output, {
         DAI_LOCK_GRAPH;
-        node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->build(*as_output(input), archive_of(archive));
+        node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->build(*as_output(output), archive_of(archive));
         return DAI_OK;
     })
 }

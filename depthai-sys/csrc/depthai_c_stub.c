@@ -96,12 +96,12 @@ int dai_nn_archive_open(const char* path, dai_nn_archive** out) { return DAI_ERR
 void dai_nn_archive_release(dai_nn_archive* a) {}
 int dai_nn_archive_input_size(const dai_nn_archive* a, uint32_t index, uint32_t* w, uint32_t* h) { return DAI_ERR; }
 int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps) { return DAI_ERR; }
-int dai_neural_network_build_output(dai_node* nn, dai_output* input, const dai_nn_archive* archive) { return DAI_ERR; }
+int dai_neural_network_build_output(dai_node* nn, dai_output* output, const dai_nn_archive* archive) { return DAI_ERR; }
 int dai_neural_network_set_nn_archive(dai_node* nn, const dai_nn_archive* archive) { return DAI_ERR; }
 int dai_neural_network_set_num_inference_threads(dai_node* nn, int32_t n) { return DAI_ERR; }
 int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n) { return DAI_ERR; }
 int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps) { return DAI_ERR; }
-int dai_detection_network_build_output(dai_node* dn, dai_output* input, const dai_nn_archive* archive) { return DAI_ERR; }
+int dai_detection_network_build_output(dai_node* dn, dai_output* output, const dai_nn_archive* archive) { return DAI_ERR; }
 int dai_detection_network_set_confidence_threshold(dai_node* dn, float threshold) { return DAI_ERR; }
 int dai_detection_network_input(dai_node* dn, dai_input** out) { return DAI_ERR; }
 int dai_detection_network_out(dai_node* dn, dai_output** out) { return DAI_ERR; }

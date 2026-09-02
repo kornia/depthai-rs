@@ -550,7 +550,7 @@ int dai_nn_archive_input_size(const dai_nn_archive* a, uint32_t index, uint32_t*
  * camera and links it. `fps` <= 0 = nullopt. */
 int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps);
 /* NeuralNetwork::build(output, archive). */
-int dai_neural_network_build_output(dai_node* nn, dai_output* input, const dai_nn_archive* archive);
+int dai_neural_network_build_output(dai_node* nn, dai_output* output, const dai_nn_archive* archive);
 int dai_neural_network_set_nn_archive(dai_node* nn, const dai_nn_archive* archive);
 int dai_neural_network_set_num_inference_threads(dai_node* nn, int32_t n);
 int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n);
@@ -560,7 +560,7 @@ int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n);
 /* DetectionNetwork (NeuralNetwork + DetectionParser subnodes)                 */
 /* ------------------------------------------------------------------------- */
 int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps);
-int dai_detection_network_build_output(dai_node* dn, dai_output* input, const dai_nn_archive* archive);
+int dai_detection_network_build_output(dai_node* dn, dai_output* output, const dai_nn_archive* archive);
 int dai_detection_network_set_confidence_threshold(dai_node* dn, float threshold);
 /* Its ports are references into the subnodes, so they are reached explicitly. */
 int dai_detection_network_input(dai_node* dn, dai_input** out);

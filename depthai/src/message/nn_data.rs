@@ -151,6 +151,8 @@ impl NnData {
         let mut index = vec![0usize; info.dims.len()];
         let dequant = |v: f32| (v - info.qp_zp) * info.qp_scale;
         for _ in 0..n {
+            // In range: strides are non-negative, so the offset is monotone in every
+            // coordinate and `tensor_bytes` sized the slice at the last index.
             let at = info.element_offset(&index, elem);
             let b = &bytes[at..at + elem];
             out.push(match info.datatype {

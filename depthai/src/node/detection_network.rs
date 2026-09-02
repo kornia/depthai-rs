@@ -39,10 +39,10 @@ impl DetectionNetwork {
         })
     }
 
-    /// `DetectionNetwork::build(input, archive)`.
-    pub fn build_output<M: Message>(&self, input: &Output<M>, archive: &NNArchive) -> Result<()> {
+    /// `DetectionNetwork::build(output, archive)`: link `output` into `input` and load `archive`.
+    pub fn build_output<M: Message>(&self, output: &Output<M>, archive: &NNArchive) -> Result<()> {
         check(unsafe {
-            sys::dai_detection_network_build_output(self.0.raw(), input.raw(), archive.raw())
+            sys::dai_detection_network_build_output(self.0.raw(), output.raw(), archive.raw())
         })
     }
 

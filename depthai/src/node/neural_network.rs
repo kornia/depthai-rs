@@ -41,9 +41,9 @@ impl NeuralNetwork {
     }
 
     /// `NeuralNetwork::build(input, archive)`: link `input` and load `archive`.
-    pub fn build_output<M: Message>(&self, input: &Output<M>, archive: &NNArchive) -> Result<()> {
+    pub fn build_output<M: Message>(&self, output: &Output<M>, archive: &NNArchive) -> Result<()> {
         check(unsafe {
-            sys::dai_neural_network_build_output(self.0.raw(), input.raw(), archive.raw())
+            sys::dai_neural_network_build_output(self.0.raw(), output.raw(), archive.raw())
         })
     }
 

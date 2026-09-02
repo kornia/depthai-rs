@@ -204,7 +204,7 @@ extern "C" {
     ) -> c_int;
     pub fn dai_neural_network_build_output(
         nn: *mut dai_node,
-        input: *mut dai_output,
+        output: *mut dai_output,
         archive: *const dai_nn_archive,
     ) -> c_int;
     pub fn dai_neural_network_set_nn_archive(
@@ -221,7 +221,7 @@ extern "C" {
     ) -> c_int;
     pub fn dai_detection_network_build_output(
         dn: *mut dai_node,
-        input: *mut dai_output,
+        output: *mut dai_output,
         archive: *const dai_nn_archive,
     ) -> c_int;
     pub fn dai_detection_network_set_confidence_threshold(
