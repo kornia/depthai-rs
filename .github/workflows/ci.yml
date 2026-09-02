@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Formatting: pure parse, no native deps.
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  # Type-check, clippy and the pure-Rust unit tests against the error-only stub:
+  # no depthai-core needed. Catches API drift between the C header, the generated
+  # extern block, and the safe wrapper.
+  check-stub:
+    runs-on: ubuntu-latest
+    env:
+      DEPTHAI_SYS_SKIP_NATIVE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo metadata --locked --format-version 1 > /dev/null
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: generated files are up to date
+        run: |
+          python3 depthai-sys/scripts/gen_stub.py
+          python3 depthai-sys/scripts/gen_ffi.py
+          git diff --exit-code -- depthai-sys/csrc/depthai_c_stub.c depthai-sys/src/ffi.rs
+
+  # Real build + host-only graph tests + hardware tests. Needs a self-hosted
+  # runner with a depthai-core prefix (and an OAK for the HIT job).
+  jetson:
+    if: false # enable once a self-hosted runner with DEPTHAI_PREFIX is registered
+    runs-on: [self-hosted, jetson]
+    env:
+      CARGO_BUILD_JOBS: "2"
+      DEPTHAI_PREFIX: ${{ vars.DEPTHAI_PREFIX }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build -j2 --workspace --all-targets
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test -j2 --workspace
+      - run: DEPTHAI_HIT=1 cargo test -j2 -p depthai --test hit -- --ignored --test-threads=1

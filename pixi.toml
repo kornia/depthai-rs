@@ -1,0 +1,19 @@
+[workspace]
+name = "depthai-rs"
+channels = ["conda-forge"]
+platforms = ["linux-aarch64", "linux-64"]
+
+# Native toolchain for building depthai-core from source (scripts/build_depthai.sh).
+[dependencies]
+cmake = ">=3.28"
+ninja = "*"
+pkg-config = "*"
+libusb = "*"
+
+[target.linux-aarch64.activation.env]
+CARGO_BUILD_JOBS = "2"
+
+[tasks]
+depthai-build = "bash depthai-sys/scripts/build_depthai.sh"
+check = { cmd = "cargo clippy --all-targets -- -D warnings", env = { DEPTHAI_SYS_SKIP_NATIVE = "1" } }
+test = "cargo test --workspace"
