@@ -39,7 +39,7 @@ fn main() -> depthai::Result<()> {
 
     // Inference: the node requests its own 312x312 input from the camera.
     let nn = pipeline.create::<NeuralNetwork>()?;
-    nn.build_camera(&cam, &NNModelDescription::new(MODEL), Some(10.0))?;
+    nn.build_camera(&cam, &NNModelDescription::new(MODEL), Some(10.0), None)?;
     let nn_q = nn.out()?.create_output_queue(4, false)?;
 
     // Video: camera NV12 -> Gate -> H.264, opened in bursts from the host.
@@ -113,6 +113,10 @@ fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x).exp())
 }
 
+fn logit(p: f32) -> f32 {
+    (p / (1.0 - p)).ln()
+}
+
 /// Pick the three heads by shape: `[1, Q, 4]`, `[1, Q, C]`, `[1, Q, H, W]`.
 fn find_heads(tensors: &[TensorInfo]) -> Option<(&TensorInfo, &TensorInfo, &TensorInfo)> {
     let boxes = tensors
@@ -138,55 +142,60 @@ fn decode(out: &NnData) -> depthai::Result<Vec<Instance>> {
         eprintln!("unexpected heads: {}", names.join(" "));
         return Ok(Vec::new());
     };
-    let boxes = out.tensor_f32(boxes_t)?;
-    let scores = out.tensor_f32(scores_t)?;
-    let (queries, classes) = (scores_t.dims[1] as usize, scores_t.dims[2] as usize);
-    let mask_hw = (masks_t.dims[2] * masks_t.dims[3]) as usize;
-    let mut masks: Option<Vec<f32>> = None; // decoded lazily: only when something scores
+    let boxes = out.tensor_f32(boxes_t, true)?;
+    let scores = out.tensor_f32(scores_t, true)?;
+    let classes = scores_t.dims[2] as usize;
+    // sigmoid(x) > t  <=>  x > logit(t): compare logits, no exp per element.
+    let score_logit = logit(SCORE_THRESHOLD);
+    let mask_logit = logit(MASK_THRESHOLD);
 
-    let mut found = Vec::new();
-    for q in 0..queries {
-        // Best class, skipping 0 (background / no-object).
-        let row = &scores[q * classes..(q + 1) * classes];
-        let (class, logit) =
-            row.iter()
-                .enumerate()
-                .skip(1)
-                .fold(
-                    (0, f32::NEG_INFINITY),
-                    |b, (i, &v)| if v > b.1 { (i, v) } else { b },
-                );
-        let score = sigmoid(logit);
-        if score < SCORE_THRESHOLD {
+    // Pass 1: queries whose best non-background class clears the threshold.
+    let mut found: Vec<(usize, Instance)> = Vec::new();
+    for (q, (bx, row)) in boxes
+        .chunks_exact(4)
+        .zip(scores.chunks_exact(classes))
+        .enumerate()
+    {
+        let Some((class, &best)) = row
+            .iter()
+            .enumerate()
+            .skip(1)
+            .max_by(|a, b| a.1.total_cmp(b.1))
+        else {
+            continue;
+        };
+        if best <= score_logit {
             continue;
         }
-        let [cx, cy, w, h] = [
-            boxes[q * 4],
-            boxes[q * 4 + 1],
-            boxes[q * 4 + 2],
-            boxes[q * 4 + 3],
-        ];
+        let [cx, cy, w, h] = [bx[0], bx[1], bx[2], bx[3]];
         let bbox = [
             (cx - w / 2.0).clamp(0.0, 1.0),
             (cy - h / 2.0).clamp(0.0, 1.0),
             (cx + w / 2.0).clamp(0.0, 1.0),
             (cy + h / 2.0).clamp(0.0, 1.0),
         ];
-        let masks = match &masks {
-            Some(m) => m,
-            None => masks.insert(out.tensor_f32(masks_t)?),
-        };
-        let mask_pixels = masks[q * mask_hw..(q + 1) * mask_hw]
-            .iter()
-            .filter(|&&v| sigmoid(v) > MASK_THRESHOLD)
-            .count();
-        found.push(Instance {
-            class,
-            score,
-            bbox,
-            mask_pixels,
-        });
+        found.push((
+            q,
+            Instance {
+                class,
+                score: sigmoid(best),
+                bbox,
+                mask_pixels: 0,
+            },
+        ));
     }
+    // Pass 2: masks only when something was found (the big tensor).
+    if !found.is_empty() {
+        let masks = out.tensor_f32(masks_t, true)?;
+        let mask_hw = (masks_t.dims[2] * masks_t.dims[3]) as usize;
+        for (q, inst) in &mut found {
+            inst.mask_pixels = masks[*q * mask_hw..(*q + 1) * mask_hw]
+                .iter()
+                .filter(|&&v| v > mask_logit)
+                .count();
+        }
+    }
+    let mut found: Vec<Instance> = found.into_iter().map(|(_, i)| i).collect();
     found.sort_by(|a, b| b.score.total_cmp(&a.score));
     Ok(found)
 }

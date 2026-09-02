@@ -318,10 +318,13 @@ pub struct dai_tensor_info {
     pub order: i32,
     pub num_dims: u32,
     pub dims: [u32; 8],
+    pub num_strides: u32,
     pub strides: [u32; 8],
     pub offset: u32,
+    pub quantization: i32,
     pub qp_scale: f32,
     pub qp_zp: f32,
+    pub elem_size: u32,
 }
 
 impl Default for dai_tensor_info {
@@ -384,7 +387,7 @@ mod tests {
         assert_eq!(size_of::<dai_imu_rotvec_report>(), 64);
         assert_eq!(size_of::<dai_imu_packet>(), 232);
         assert_eq!(size_of::<dai_encoded_frame_info>(), 56);
-        assert_eq!(size_of::<dai_tensor_info>(), 152);
+        assert_eq!(size_of::<dai_tensor_info>(), 164);
         assert_eq!(size_of::<dai_img_detection>(), 88);
         assert_eq!(align_of::<dai_img_frame_info>(), 8);
         assert_eq!(align_of::<dai_imu_packet>(), 8);

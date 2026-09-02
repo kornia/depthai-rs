@@ -21,7 +21,7 @@ pub use img_detections::{ImgDetection, ImgDetections};
 pub use img_frame::{ImgFrame, ImgFrameInfo};
 pub use imu_data::{ImuData, ImuPacket, ImuRotationVector, ImuVecReport, RawTimestamp};
 pub use message_group::MessageGroup;
-pub use nn_data::{f16_to_f32, NnData, TensorInfo};
+pub use nn_data::{NnData, TensorInfo};
 
 use std::ptr::NonNull;
 use std::sync::Arc;

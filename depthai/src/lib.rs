@@ -79,9 +79,9 @@ pub use device::{build_version, steady_now, Device, DeviceInfo};
 pub use enums::*;
 pub use error::{DepthaiError, Result};
 pub use message::{
-    f16_to_f32, AnyMessage, EncodedFrame, EncodedFrameInfo, GateControl, ImgDetection,
-    ImgDetections, ImgFrame, ImgFrameInfo, ImuData, ImuPacket, ImuRotationVector, ImuVecReport,
-    Message, MessageGroup, MessageHeader, NnData, RawTimestamp, TensorInfo,
+    AnyMessage, EncodedFrame, EncodedFrameInfo, GateControl, ImgDetection, ImgDetections, ImgFrame,
+    ImgFrameInfo, ImuData, ImuPacket, ImuRotationVector, ImuVecReport, Message, MessageGroup,
+    MessageHeader, NnData, RawTimestamp, TensorInfo,
 };
 pub use model_zoo::{get_model_from_zoo, NNModelDescription};
 pub use nn_archive::NNArchive;

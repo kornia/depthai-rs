@@ -298,6 +298,37 @@ into_i32!(
     Platform
 );
 
+dai_enum! {
+    /// `dai::TensorInfo::DataType`: how one tensor element is stored.
+    TensorDataType {
+        Fp16 = DAI_TENSOR_FP16,
+        /// Unsigned 8-bit, quantised (`(v - qp_zp) * qp_scale`).
+        U8f = DAI_TENSOR_U8F,
+        /// Signed 32-bit integer.
+        Int = DAI_TENSOR_INT,
+        Fp32 = DAI_TENSOR_FP32,
+        /// Signed 8-bit, quantised.
+        I8 = DAI_TENSOR_I8,
+        Fp64 = DAI_TENSOR_FP64,
+        /// Unsigned 16-bit, quantised.
+        U16f = DAI_TENSOR_U16F,
+    }
+}
+
+dai_enum! {
+    /// `dai::TensorInfo::StorageOrder`: the meaning of a tensor's dims, outermost
+    /// first (the values spell the axes, e.g. `0x4321` = N,C,H,W).
+    StorageOrder {
+        Nhwc = DAI_ORDER_NHWC,
+        Nhcw = DAI_ORDER_NHCW,
+        Nchw = DAI_ORDER_NCHW,
+        Hwc = DAI_ORDER_HWC,
+        Chw = DAI_ORDER_CHW,
+        Nc = DAI_ORDER_NC,
+        C = DAI_ORDER_C,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,50 +351,5 @@ mod tests {
         assert_eq!(EncodedFrameType::from_raw(0), EncodedFrameType::I);
         assert_eq!(opt_raw::<UsbSpeed>(None), -1);
         assert_eq!(opt_raw(Some(UsbSpeed::High)), 3);
-    }
-}
-
-dai_enum! {
-    /// `dai::TensorInfo::DataType`: how one tensor element is stored.
-    TensorDataType {
-        Fp16 = DAI_TENSOR_FP16,
-        /// Unsigned 8-bit, quantised (`(v - qp_zp) * qp_scale`).
-        U8f = DAI_TENSOR_U8F,
-        /// Signed 32-bit integer.
-        Int = DAI_TENSOR_INT,
-        Fp32 = DAI_TENSOR_FP32,
-        /// Signed 8-bit, quantised.
-        I8 = DAI_TENSOR_I8,
-        Fp64 = DAI_TENSOR_FP64,
-        /// Unsigned 16-bit, quantised.
-        U16f = DAI_TENSOR_U16F,
-    }
-}
-
-impl TensorDataType {
-    /// Bytes per element (`TensorInfo::getDataTypeSize`); `None` for a value this
-    /// crate does not know.
-    pub fn size(self) -> Option<usize> {
-        Some(match self {
-            Self::U8f | Self::I8 => 1,
-            Self::Fp16 | Self::U16f => 2,
-            Self::Int | Self::Fp32 => 4,
-            Self::Fp64 => 8,
-            Self::Other(_) => return None,
-        })
-    }
-}
-
-dai_enum! {
-    /// `dai::TensorInfo::StorageOrder`: the meaning of a tensor's dims, outermost
-    /// first (the values spell the axes, e.g. `0x4321` = N,C,H,W).
-    StorageOrder {
-        Nhwc = DAI_ORDER_NHWC,
-        Nhcw = DAI_ORDER_NHCW,
-        Nchw = DAI_ORDER_NCHW,
-        Hwc = DAI_ORDER_HWC,
-        Chw = DAI_ORDER_CHW,
-        Nc = DAI_ORDER_NC,
-        C = DAI_ORDER_C,
     }
 }

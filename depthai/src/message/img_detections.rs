@@ -3,7 +3,7 @@
 use depthai_sys as sys;
 
 use crate::enums::Datatype;
-use crate::error::{check, fixed_string, out_val, Result};
+use crate::error::{fill_vec, fixed_string, Result};
 use crate::message::{AnyMessage, Message, Sealed};
 
 /// A `dai::ImgDetection`. Coordinates are normalised `[0, 1]` of the network's
@@ -39,32 +39,30 @@ impl Message for ImgDetections {
     }
 }
 
+impl ImgDetection {
+    fn from_raw(d: &sys::dai_img_detection) -> Self {
+        ImgDetection {
+            label: d.label,
+            label_name: fixed_string(&d.label_name),
+            confidence: d.confidence,
+            xmin: d.xmin,
+            ymin: d.ymin,
+            xmax: d.xmax,
+            ymax: d.ymax,
+        }
+    }
+}
+
 impl ImgDetections {
-    pub fn len(&self) -> Result<usize> {
-        out_val(|out| unsafe { sys::dai_img_detections_count(self.any.raw(), out) })
-    }
-
-    pub fn is_empty(&self) -> Result<bool> {
-        Ok(self.len()? == 0)
-    }
-
     /// `detections`, copied out.
     pub fn detections(&self) -> Result<Vec<ImgDetection>> {
-        let n = self.len()?;
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let mut d = sys::dai_img_detection::default();
-            check(unsafe { sys::dai_img_detections_get(self.any.raw(), i, &mut d) })?;
-            out.push(ImgDetection {
-                label: d.label,
-                label_name: fixed_string(&d.label_name),
-                confidence: d.confidence,
-                xmin: d.xmin,
-                ymin: d.ymin,
-                xmax: d.xmax,
-                ymax: d.ymax,
-            });
-        }
-        Ok(out)
+        let raw = fill_vec(16, |buf| {
+            let mut n = 0usize;
+            let rc = unsafe {
+                sys::dai_img_detections(self.any.raw(), buf.as_mut_ptr(), buf.len(), &mut n)
+            };
+            crate::error::check(rc).map(|()| n)
+        })?;
+        Ok(raw.iter().map(ImgDetection::from_raw).collect())
     }
 }

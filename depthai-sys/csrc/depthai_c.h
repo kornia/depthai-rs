@@ -329,18 +329,21 @@ typedef struct dai_nn_model_description {
     const char* model_precision_type;
 } dai_nn_model_description;
 
-/* dai::TensorInfo (NNData layer description). */
+/* dai::TensorInfo (NNData layer description), plain copy + getDataTypeSize(). */
 typedef struct dai_tensor_info {
     char name[64];
-    int32_t datatype;    /* dai::TensorInfo::DataType */
-    int32_t order;       /* dai::TensorInfo::StorageOrder */
-    uint32_t num_dims;   /* entries used in dims/strides (truncated to 8) */
+    int32_t datatype;     /* dai::TensorInfo::DataType */
+    int32_t order;        /* dai::TensorInfo::StorageOrder */
+    uint32_t num_dims;    /* dims.size() (copied up to 8) */
     uint32_t dims[8];
-    uint32_t strides[8]; /* bytes */
-    uint32_t offset;     /* byte offset into the NNData buffer */
-    float qp_scale;      /* dequantised = (value - qp_zp) * qp_scale */
+    uint32_t num_strides; /* strides.size() (copied up to 8); 0 = not reported */
+    uint32_t strides[8];  /* bytes */
+    uint32_t offset;      /* byte offset into the NNData buffer */
+    int32_t quantization; /* bool: qp_scale/qp_zp apply */
+    float qp_scale;       /* dequantised = (value - qp_zp) * qp_scale */
     float qp_zp;
-} dai_tensor_info; /* sizeof == 152 */
+    uint32_t elem_size;   /* getDataTypeSize(), bytes */
+} dai_tensor_info; /* sizeof == 164 */
 
 /* dai::ImgDetection. Coordinates are normalised [0,1] of the input frame. */
 typedef struct dai_img_detection {
@@ -546,9 +549,13 @@ int dai_nn_archive_input_size(const dai_nn_archive* a, uint32_t index, uint32_t*
 /* ------------------------------------------------------------------------- */
 /* NeuralNetwork                                                              */
 /* ------------------------------------------------------------------------- */
-/* NeuralNetwork::build(camera, model, fps?): requests the model's input from the
- * camera and links it. `fps` <= 0 = nullopt. */
-int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps);
+/* NeuralNetwork::build(camera, model, fps?, resizeMode?): requests the model's
+ * input from the camera and links it. `fps` <= 0 = nullopt, `resize_mode` < 0 =
+ * the C++ default (CROP). Of the Model variant (NNModelDescription | NNArchive |
+ * path) only the description arm is exposed here; archives go through
+ * *_build_output. */
+int dai_neural_network_build_camera(
+    dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps, int32_t resize_mode);
 /* NeuralNetwork::build(output, archive). */
 int dai_neural_network_build_output(dai_node* nn, dai_output* output, const dai_nn_archive* archive);
 int dai_neural_network_set_nn_archive(dai_node* nn, const dai_nn_archive* archive);
@@ -559,7 +566,8 @@ int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n);
 /* ------------------------------------------------------------------------- */
 /* DetectionNetwork (NeuralNetwork + DetectionParser subnodes)                 */
 /* ------------------------------------------------------------------------- */
-int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps);
+int dai_detection_network_build_camera(
+    dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps, int32_t resize_mode);
 int dai_detection_network_build_output(dai_node* dn, dai_output* output, const dai_nn_archive* archive);
 int dai_detection_network_set_confidence_threshold(dai_node* dn, float threshold);
 /* Its ports are references into the subnodes, so they are reached explicitly. */
@@ -628,13 +636,13 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
 /* GateControl(open, numMessages, fps): a new control message. `num_messages` < 0
  * = unlimited, `fps` < 0 = unthrottled (dai::GateControl's own defaults). */
 int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out);
-/* NNData: layer names (newline-joined) and one layer's TensorInfo (1 / 0 absent / -1).
- * The tensor bytes live in the message buffer (dai_msg_data) at `offset`. */
-int dai_nn_data_layer_names(const dai_msg* m, char** out);
+/* NNData::tensors: copies up to `cap` TensorInfos, reports the total in *n. The
+ * tensor bytes live in the message buffer (dai_msg_data) at each `offset`. */
+int dai_nn_data_tensors(const dai_msg* m, dai_tensor_info* out, size_t cap, size_t* n);
+/* NNData::getTensorInfo(name): 1 / 0 absent / -1. */
 int dai_nn_data_tensor_info(const dai_msg* m, const char* name, dai_tensor_info* out);
-/* ImgDetections */
-int dai_img_detections_count(const dai_msg* m, size_t* out);
-int dai_img_detections_get(const dai_msg* m, size_t index, dai_img_detection* out);
+/* ImgDetections::detections: copies up to `cap`, reports the total in *n. */
+int dai_img_detections(const dai_msg* m, dai_img_detection* out, size_t cap, size_t* n);
 /* MessageGroup */
 int dai_msg_group_get(const dai_msg* g, const char* name, dai_msg** out); /* 1 / 0 absent / -1 */
 int dai_msg_group_num_messages(const dai_msg* g, int64_t* out);

@@ -25,6 +25,7 @@ fn main() -> depthai::Result<()> {
         &cam,
         &NNModelDescription::new("luxonis/yolov6-nano:r2-coco-512x288"),
         Some(15.0),
+        None,
     )?;
     det.set_confidence_threshold(0.5)?;
     let classes = det.classes()?;

@@ -6,7 +6,7 @@ mod camera;
 mod detection_network;
 mod gate;
 mod imu;
-mod neural_network;
+pub(crate) mod neural_network;
 mod stereo_depth;
 mod sync;
 mod video_encoder;
@@ -20,13 +20,15 @@ pub use stereo_depth::{PostProcessing, StereoDepth};
 pub use sync::Sync;
 pub use video_encoder::VideoEncoder;
 
+use std::os::raw::c_int;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
 use depthai_sys as sys;
 
 use crate::error::{
-    check, cstring, out_lines, out_val, poll_handle, static_string, DepthaiError, Result,
+    check, cstring, out_handle, out_lines, out_val, poll_handle, static_string, DepthaiError,
+    Result,
 };
 use crate::message::{AnyMessage, Message};
 use crate::pipeline::Pipeline;
@@ -134,6 +136,26 @@ impl NodeHandle {
         })?;
         // SAFETY: the shim handed out a port owned by this node.
         Ok(found.map(|raw| unsafe { Input::from_raw(self.clone(), raw) }))
+    }
+
+    /// A port reached through a dedicated shim accessor (a node whose ports are
+    /// references into subnodes, invisible to the name lookup).
+    pub(crate) fn output_from<M: Message>(
+        &self,
+        f: unsafe extern "C" fn(*mut sys::dai_node, *mut *mut sys::dai_output) -> c_int,
+    ) -> Result<Output<M>> {
+        let raw = out_handle(|out| unsafe { f(self.raw(), out) })?;
+        // SAFETY: the shim handed out a port owned by this node.
+        Ok(unsafe { Output::from_raw(self.clone(), raw) })
+    }
+
+    pub(crate) fn input_from(
+        &self,
+        f: unsafe extern "C" fn(*mut sys::dai_node, *mut *mut sys::dai_input) -> c_int,
+    ) -> Result<Input> {
+        let raw = out_handle(|out| unsafe { f(self.raw(), out) })?;
+        // SAFETY: as in `output_from`.
+        Ok(unsafe { Input::from_raw(self.clone(), raw) })
     }
 
     /// A fixed port that the node type guarantees exists.

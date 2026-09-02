@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use depthai::node::{Camera, Gate, VideoEncoder};
 use depthai::{
-    CameraBoardSocket, Device, GateControl, ImgFrameType, ImgResizeMode, Message, Pipeline,
+    CameraBoardSocket, Device, GateControl, ImgFrameType, ImgResizeMode, Pipeline,
     VideoEncoderProfile,
 };
 
@@ -55,7 +55,6 @@ fn main() -> depthai::Result<()> {
         if let Some(au) = video.get(Duration::from_millis(100))? {
             frames += 1;
             bytes += au.data().len();
-            let _ = au.sequence_num();
         }
         if window.elapsed() >= Duration::from_secs(1) {
             println!(

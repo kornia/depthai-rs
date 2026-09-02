@@ -95,12 +95,12 @@ int dai_model_zoo_get(const dai_nn_model_description* desc, int use_cached, cons
 int dai_nn_archive_open(const char* path, dai_nn_archive** out) { return DAI_ERR; }
 void dai_nn_archive_release(dai_nn_archive* a) {}
 int dai_nn_archive_input_size(const dai_nn_archive* a, uint32_t index, uint32_t* w, uint32_t* h) { return DAI_ERR; }
-int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps) { return DAI_ERR; }
+int dai_neural_network_build_camera( dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps, int32_t resize_mode) { return DAI_ERR; }
 int dai_neural_network_build_output(dai_node* nn, dai_output* output, const dai_nn_archive* archive) { return DAI_ERR; }
 int dai_neural_network_set_nn_archive(dai_node* nn, const dai_nn_archive* archive) { return DAI_ERR; }
 int dai_neural_network_set_num_inference_threads(dai_node* nn, int32_t n) { return DAI_ERR; }
 int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n) { return DAI_ERR; }
-int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps) { return DAI_ERR; }
+int dai_detection_network_build_camera( dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps, int32_t resize_mode) { return DAI_ERR; }
 int dai_detection_network_build_output(dai_node* dn, dai_output* output, const dai_nn_archive* archive) { return DAI_ERR; }
 int dai_detection_network_set_confidence_threshold(dai_node* dn, float threshold) { return DAI_ERR; }
 int dai_detection_network_input(dai_node* dn, dai_input** out) { return DAI_ERR; }
@@ -137,10 +137,9 @@ int dai_img_frame_plane_height(const dai_msg* m, uint32_t* out) { return DAI_ERR
 int dai_encoded_frame_get_info(const dai_msg* m, dai_encoded_frame_info* out) { return DAI_ERR; }
 int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size_t* n) { return DAI_ERR; }
 int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out) { return DAI_ERR; }
-int dai_nn_data_layer_names(const dai_msg* m, char** out) { return DAI_ERR; }
+int dai_nn_data_tensors(const dai_msg* m, dai_tensor_info* out, size_t cap, size_t* n) { return DAI_ERR; }
 int dai_nn_data_tensor_info(const dai_msg* m, const char* name, dai_tensor_info* out) { return DAI_ERR; }
-int dai_img_detections_count(const dai_msg* m, size_t* out) { return DAI_ERR; }
-int dai_img_detections_get(const dai_msg* m, size_t index, dai_img_detection* out) { return DAI_ERR; }
+int dai_img_detections(const dai_msg* m, dai_img_detection* out, size_t cap, size_t* n) { return DAI_ERR; }
 int dai_msg_group_get(const dai_msg* g, const char* name, dai_msg** out) { return DAI_ERR; }
 int dai_msg_group_num_messages(const dai_msg* g, int64_t* out) { return DAI_ERR; }
 int dai_msg_group_names(const dai_msg* g, char** out) { return DAI_ERR; }

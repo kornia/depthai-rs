@@ -11,6 +11,7 @@ use crate::enums::Datatype;
 
 /// Everything that can go wrong talking to depthai-core.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum DepthaiError {
     /// A C++ exception inside depthai-core (device lost, bad pipeline, XLink
     /// error, ...), with its message. This is the common case.
@@ -121,6 +122,16 @@ pub(crate) fn poll_handle<T>(
     }
 }
 
+/// [`out_val`] for poll-style (`1 / 0 / -1`) calls that fill a value.
+pub(crate) fn poll_val<T: Default>(call: impl FnOnce(&mut T) -> c_int) -> Result<Option<T>> {
+    let mut v = T::default();
+    match call(&mut v) {
+        1 => Ok(Some(v)),
+        0 => Ok(None),
+        _ => Err(take_native_error()),
+    }
+}
+
 /// Run a shim "fill this buffer, report the total count" call, growing the
 /// buffer once when the total exceeds `initial`.
 pub(crate) fn fill_vec<T: Default + Clone>(
@@ -152,6 +163,19 @@ pub(crate) unsafe fn static_string(p: *const c_char) -> String {
 
 pub(crate) fn cstring(s: &str) -> Result<CString> {
     Ok(CString::new(s)?)
+}
+
+/// `None` → NULL at the shim (the C++ default), via [`opt_ptr`].
+pub(crate) fn opt_cstring(s: Option<&str>) -> Result<Option<CString>> {
+    s.map(cstring).transpose()
+}
+
+pub(crate) fn opt_ptr(s: &Option<CString>) -> *const c_char {
+    s.as_ref().map_or(std::ptr::null(), |c| c.as_ptr())
+}
+
+pub(crate) fn path_cstring(p: &std::path::Path) -> Result<CString> {
+    cstring(&p.to_string_lossy())
 }
 
 /// Copy a NUL-terminated fixed-size C char array into a String.

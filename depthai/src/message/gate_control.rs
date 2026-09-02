@@ -1,12 +1,10 @@
 //! [`GateControl`]: the message that opens or closes a [`Gate`](crate::node::Gate).
 
-use std::ptr::NonNull;
-
 use depthai_sys as sys;
 
 use crate::enums::Datatype;
 use crate::error::{out_handle, Result};
-use crate::message::{AnyMessage, Message, Sealed};
+use crate::message::{typed_from_raw, AnyMessage, Message, Sealed};
 
 /// A `dai::GateControl`, built on the host and sent into a Gate's
 /// `inputControl` through an [`InputQueue`](crate::InputQueue).
@@ -32,12 +30,13 @@ impl GateControl {
     /// `GateControl(open, numMessages, fps)`: `num_messages` `None` = unlimited,
     /// `fps` `None` = unthrottled.
     pub fn new(open: bool, num_messages: Option<u32>, fps: Option<u32>) -> Result<Self> {
-        let n = num_messages.map_or(-1, |v| v.min(i32::MAX as u32) as i32);
-        let f = fps.map_or(-1, |v| v.min(i32::MAX as u32) as i32);
-        let raw: NonNull<sys::dai_msg> =
-            out_handle(|out| unsafe { sys::dai_gate_control_new(open as i32, n, f, out) })?;
+        // -1 = the C++ default (unlimited / unthrottled).
+        let arg = |o: Option<u32>| o.map_or(-1, |v| i32::try_from(v).unwrap_or(i32::MAX));
+        let raw = out_handle(|out| unsafe {
+            sys::dai_gate_control_new(open as i32, arg(num_messages), arg(fps), out)
+        })?;
         // SAFETY: a fresh owned handle from the shim.
-        unsafe { AnyMessage::from_raw(raw) }?.downcast()
+        unsafe { typed_from_raw(raw) }
     }
 
     /// `GateControl::openGate()`: pass everything.

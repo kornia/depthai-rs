@@ -201,6 +201,7 @@ extern "C" {
         camera: *mut dai_node,
         desc: *const dai_nn_model_description,
         fps: f32,
+        resize_mode: i32,
     ) -> c_int;
     pub fn dai_neural_network_build_output(
         nn: *mut dai_node,
@@ -218,6 +219,7 @@ extern "C" {
         camera: *mut dai_node,
         desc: *const dai_nn_model_description,
         fps: f32,
+        resize_mode: i32,
     ) -> c_int;
     pub fn dai_detection_network_build_output(
         dn: *mut dai_node,
@@ -275,17 +277,22 @@ extern "C" {
         fps: i32,
         out: *mut *mut dai_msg,
     ) -> c_int;
-    pub fn dai_nn_data_layer_names(m: *const dai_msg, out: *mut *mut c_char) -> c_int;
+    pub fn dai_nn_data_tensors(
+        m: *const dai_msg,
+        out: *mut dai_tensor_info,
+        cap: usize,
+        n: *mut usize,
+    ) -> c_int;
     pub fn dai_nn_data_tensor_info(
         m: *const dai_msg,
         name: *const c_char,
         out: *mut dai_tensor_info,
     ) -> c_int;
-    pub fn dai_img_detections_count(m: *const dai_msg, out: *mut usize) -> c_int;
-    pub fn dai_img_detections_get(
+    pub fn dai_img_detections(
         m: *const dai_msg,
-        index: usize,
         out: *mut dai_img_detection,
+        cap: usize,
+        n: *mut usize,
     ) -> c_int;
     pub fn dai_msg_group_get(
         g: *const dai_msg,

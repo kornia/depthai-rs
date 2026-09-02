@@ -241,8 +241,7 @@ fn gate_closes_and_opens_a_stream() {
         "open gate delivers"
     );
     ctl.send(&GateControl::close().unwrap()).unwrap();
-    while q.try_get().unwrap().is_some() {}
-    std::thread::sleep(Duration::from_millis(500));
+    std::thread::sleep(Duration::from_millis(500)); // in-flight frames land
     while q.try_get().unwrap().is_some() {}
     assert!(
         q.get(Duration::from_secs(1)).unwrap().is_none(),
@@ -275,6 +274,7 @@ fn detection_network_runs_zoo_yolo() {
         &cam,
         &NNModelDescription::new("luxonis/yolov6-nano:r2-coco-512x288"),
         Some(10.0),
+        None,
     )
     .unwrap();
     assert_eq!(
@@ -301,7 +301,7 @@ fn detection_network_runs_zoo_yolo() {
     let tensors = nn.tensors().unwrap();
     assert!(!tensors.is_empty(), "YOLO reports its output layers");
     for t in &tensors {
-        let n = nn.tensor_f32(t).unwrap().len();
+        let n = nn.tensor_f32(t, true).unwrap().len();
         assert_eq!(n, t.num_elements(), "{}: dims {:?}", t.name, t.dims);
     }
     pipeline.stop().unwrap();
