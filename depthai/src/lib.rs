@@ -3,7 +3,8 @@
 //! A faithful, unopinionated wrapper shaped like depthai's own node-graph API:
 //! open a [`Device`], build a [`Pipeline`] of nodes ([`Camera`](node::Camera),
 //! [`Sync`](node::Sync), [`StereoDepth`](node::StereoDepth),
-//! [`VideoEncoder`](node::VideoEncoder), [`Imu`](node::Imu), [`Gate`](node::Gate)), link
+//! [`VideoEncoder`](node::VideoEncoder), [`Imu`](node::Imu), [`Gate`](node::Gate),
+//! [`NeuralNetwork`](node::NeuralNetwork), [`DetectionNetwork`](node::DetectionNetwork)), link
 //! [`Output`]s to [`Input`]s, create [`OutputQueue`]s, start, and pull typed
 //! messages ([`ImgFrame`], [`MessageGroup`], [`ImuData`], [`EncodedFrame`]).
 //!
@@ -65,6 +66,8 @@ pub mod device;
 pub mod enums;
 pub mod error;
 pub mod message;
+pub mod model_zoo;
+pub mod nn_archive;
 pub mod node;
 pub mod pipeline;
 pub mod port;
@@ -76,9 +79,12 @@ pub use device::{build_version, steady_now, Device, DeviceInfo};
 pub use enums::*;
 pub use error::{DepthaiError, Result};
 pub use message::{
-    AnyMessage, EncodedFrame, EncodedFrameInfo, GateControl, ImgFrame, ImgFrameInfo, ImuData,
-    ImuPacket, ImuRotationVector, ImuVecReport, Message, MessageGroup, MessageHeader, RawTimestamp,
+    f16_to_f32, AnyMessage, EncodedFrame, EncodedFrameInfo, GateControl, ImgDetection,
+    ImgDetections, ImgFrame, ImgFrameInfo, ImuData, ImuPacket, ImuRotationVector, ImuVecReport,
+    Message, MessageGroup, MessageHeader, NnData, RawTimestamp, TensorInfo,
 };
+pub use model_zoo::{get_model_from_zoo, NNModelDescription};
+pub use nn_archive::NNArchive;
 pub use node::{Node, NodeHandle, NodeType};
 pub use pipeline::Pipeline;
 pub use port::{Input, Output};

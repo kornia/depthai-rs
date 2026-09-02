@@ -108,6 +108,13 @@ On a Jetson Orin cap cargo with `CARGO_BUILD_JOBS=2`.
 - `DEPTHAI_HIT=1 cargo test -p depthai --test hit -- --ignored --test-threads=1`
   — hardware tests with an OAK attached.
 - `cargo run --example list_devices | stereo_sync | imu_dump | rgbd_depth`.
+- `gated_h264`: camera → `Gate` → `VideoEncoder`; the host opens/closes the
+  stream at runtime with `GateControl` (nothing crosses the link while closed).
+- `yolo_detect`: `DetectionNetwork` + the zoo's YOLOv6-nano on an OAK-D (RVC2),
+  decoded on the device into `ImgDetections`.
+- `rfdetr_segment`: `NeuralNetwork` + RF-DETR nano instance segmentation (RVC4
+  only), decoded on the host from `NnData` tensors, with the H.264 stream gated
+  to bursts after a detection.
 
 ## Adding to the ABI
 

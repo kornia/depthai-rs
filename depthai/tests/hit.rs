@@ -255,3 +255,54 @@ fn gate_closes_and_opens_a_stream() {
     );
     pipeline.stop().unwrap();
 }
+
+/// DetectionNetwork on an RVC2: the zoo YOLO model builds, runs, and produces
+/// an ImgDetections (first run downloads the archive; needs internet).
+#[test]
+#[ignore]
+fn detection_network_runs_zoo_yolo() {
+    if !gate() {
+        return;
+    }
+    use depthai::node::DetectionNetwork;
+    use depthai::NNModelDescription;
+    let dev = Device::open(None, None).unwrap();
+    let pipeline = Pipeline::new(&dev).unwrap();
+    let cam = pipeline.create::<Camera>().unwrap();
+    cam.build(CameraBoardSocket::CamA).unwrap();
+    let det = pipeline.create::<DetectionNetwork>().unwrap();
+    det.build_camera(
+        &cam,
+        &NNModelDescription::new("luxonis/yolov6-nano:r2-coco-512x288"),
+        Some(10.0),
+    )
+    .unwrap();
+    assert_eq!(
+        det.classes().unwrap().len(),
+        80,
+        "COCO class list from the archive"
+    );
+    let q = det.out().unwrap().create_output_queue(4, false).unwrap();
+    let raw = det
+        .out_network()
+        .unwrap()
+        .create_output_queue(4, false)
+        .unwrap();
+    pipeline.start().unwrap();
+    let dets = q
+        .get(Duration::from_secs(15))
+        .unwrap()
+        .expect("an ImgDetections within 15 s");
+    let _ = dets.detections().unwrap(); // may be empty; must decode
+    let nn = raw
+        .get(Duration::from_secs(5))
+        .unwrap()
+        .expect("NNData on outNetwork");
+    let tensors = nn.tensors().unwrap();
+    assert!(!tensors.is_empty(), "YOLO reports its output layers");
+    for t in &tensors {
+        let n = nn.tensor_f32(t).unwrap().len();
+        assert_eq!(n, t.num_elements(), "{}: dims {:?}", t.name, t.dims);
+    }
+    pipeline.stop().unwrap();
+}

@@ -56,6 +56,7 @@ typedef struct dai_input_queue dai_input_queue; /* heap std::shared_ptr<dai::Inp
 typedef struct dai_msg dai_msg;               /* heap std::shared_ptr<dai::ADatatype>    */
 typedef struct dai_calib dai_calib;           /* heap dai::CalibrationHandler (copy)     */
 typedef struct dai_bootloader dai_bootloader; /* heap dai::DeviceBootloader              */
+typedef struct dai_nn_archive dai_nn_archive;   /* heap dai::NNArchive                     */
 
 /* ------------------------------------------------------------------------- */
 /* Enum constants (int32_t on the wire; verified by static_assert in .cpp)    */
@@ -108,6 +109,8 @@ enum {
     DAI_DT_IMG_FRAME = 2,
     DAI_DT_ENCODED_FRAME = 3,
     DAI_DT_GATE_CONTROL = 5,
+    DAI_DT_NN_DATA = 6,
+    DAI_DT_IMG_DETECTIONS = 9,
     DAI_DT_IMU_DATA = 19,
     DAI_DT_MESSAGE_GROUP = 28,
 };
@@ -207,6 +210,26 @@ enum {
     DAI_ENC_FRAME_B = 2,
     DAI_ENC_FRAME_UNKNOWN = 3,
 };
+/* dai::TensorInfo::DataType */
+enum {
+    DAI_TENSOR_FP16 = 0,
+    DAI_TENSOR_U8F = 1,
+    DAI_TENSOR_INT = 2,
+    DAI_TENSOR_FP32 = 3,
+    DAI_TENSOR_I8 = 4,
+    DAI_TENSOR_FP64 = 5,
+    DAI_TENSOR_U16F = 6,
+};
+/* dai::TensorInfo::StorageOrder (subset) */
+enum {
+    DAI_ORDER_NHWC = 0x4213,
+    DAI_ORDER_NHCW = 0x4231,
+    DAI_ORDER_NCHW = 0x4321,
+    DAI_ORDER_HWC = 0x213,
+    DAI_ORDER_CHW = 0x321,
+    DAI_ORDER_NC = 0x43,
+    DAI_ORDER_C = 0x3,
+};
 /* dai::Platform */
 enum {
     DAI_PLATFORM_RVC2 = 0,
@@ -294,6 +317,41 @@ typedef struct dai_imu_packet {
     dai_imu_vec_report magnetic_field;
     dai_imu_rotvec_report rotation_vector;
 } dai_imu_packet; /* sizeof == 232 */
+
+/* dai::NNModelDescription; NULL fields take depthai's defaults (the platform is
+ * filled in from the device by the *_build_camera calls). */
+typedef struct dai_nn_model_description {
+    const char* model;                /* "luxonis/yolov6-nano:r2-coco-512x288" */
+    const char* platform;             /* "RVC2" / "RVC4" */
+    const char* optimization_level;
+    const char* compression_level;
+    const char* snpe_version;
+    const char* model_precision_type;
+} dai_nn_model_description;
+
+/* dai::TensorInfo (NNData layer description). */
+typedef struct dai_tensor_info {
+    char name[64];
+    int32_t datatype;    /* dai::TensorInfo::DataType */
+    int32_t order;       /* dai::TensorInfo::StorageOrder */
+    uint32_t num_dims;   /* entries used in dims/strides (truncated to 8) */
+    uint32_t dims[8];
+    uint32_t strides[8]; /* bytes */
+    uint32_t offset;     /* byte offset into the NNData buffer */
+    float qp_scale;      /* dequantised = (value - qp_zp) * qp_scale */
+    float qp_zp;
+} dai_tensor_info; /* sizeof == 152 */
+
+/* dai::ImgDetection. Coordinates are normalised [0,1] of the input frame. */
+typedef struct dai_img_detection {
+    uint32_t label;
+    float confidence;
+    float xmin;
+    float ymin;
+    float xmax;
+    float ymax;
+    char label_name[64];
+} dai_img_detection; /* sizeof == 88 */
 
 /* dai::EncodedFrame metadata. */
 typedef struct dai_encoded_frame_info {
@@ -383,6 +441,8 @@ int dai_pipeline_create_stereo_depth(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_video_encoder(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_imu(dai_pipeline* p, dai_node** out);
 int dai_pipeline_create_gate(dai_pipeline* p, dai_node** out);
+int dai_pipeline_create_neural_network(dai_pipeline* p, dai_node** out);
+int dai_pipeline_create_detection_network(dai_pipeline* p, dai_node** out);
 
 /* ------------------------------------------------------------------------- */
 /* Node (common)                                                              */
@@ -471,6 +531,46 @@ int dai_gate_set_run_on_host(dai_node* g, int run_on_host);
 /* ports: input "input", "inputControl" (GateControl); output "output" */
 
 /* ------------------------------------------------------------------------- */
+/* Model zoo + NNArchive                                                      */
+/* ------------------------------------------------------------------------- */
+/* getModelFromZoo(desc, useCached, cacheDir, apiKey): downloads (or finds cached)
+ * the NNArchive and returns its path. `cache_dir` / `api_key` NULL = defaults
+ * (DEPTHAI_ZOO_CACHE_PATH / none). */
+int dai_model_zoo_get(const dai_nn_model_description* desc, int use_cached, const char* cache_dir, const char* api_key,
+                      char** out_path);
+int dai_nn_archive_open(const char* path, dai_nn_archive** out);
+void dai_nn_archive_release(dai_nn_archive* a);
+/* NNArchive::getInputSize(index): 1 got / 0 unknown / -1. */
+int dai_nn_archive_input_size(const dai_nn_archive* a, uint32_t index, uint32_t* w, uint32_t* h);
+
+/* ------------------------------------------------------------------------- */
+/* NeuralNetwork                                                              */
+/* ------------------------------------------------------------------------- */
+/* NeuralNetwork::build(camera, model, fps?): requests the model's input from the
+ * camera and links it. `fps` <= 0 = nullopt. */
+int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps);
+/* NeuralNetwork::build(output, archive). */
+int dai_neural_network_build_output(dai_node* nn, dai_output* input, const dai_nn_archive* archive);
+int dai_neural_network_set_nn_archive(dai_node* nn, const dai_nn_archive* archive);
+int dai_neural_network_set_num_inference_threads(dai_node* nn, int32_t n);
+int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n);
+/* ports: input "in"; outputs "out" (NNData), "passthrough" */
+
+/* ------------------------------------------------------------------------- */
+/* DetectionNetwork (NeuralNetwork + DetectionParser subnodes)                 */
+/* ------------------------------------------------------------------------- */
+int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps);
+int dai_detection_network_build_output(dai_node* dn, dai_output* input, const dai_nn_archive* archive);
+int dai_detection_network_set_confidence_threshold(dai_node* dn, float threshold);
+/* Its ports are references into the subnodes, so they are reached explicitly. */
+int dai_detection_network_input(dai_node* dn, dai_input** out);
+int dai_detection_network_out(dai_node* dn, dai_output** out);         /* ImgDetections */
+int dai_detection_network_out_network(dai_node* dn, dai_output** out); /* NNData */
+int dai_detection_network_passthrough(dai_node* dn, dai_output** out);
+/* getClasses(): newline-joined, "" when the archive carries none. */
+int dai_detection_network_classes(dai_node* dn, char** out);
+
+/* ------------------------------------------------------------------------- */
 /* IMU                                                                        */
 /* ------------------------------------------------------------------------- */
 int dai_imu_enable_sensor(dai_node* imu, int32_t sensor, uint32_t report_rate_hz);
@@ -528,6 +628,13 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
 /* GateControl(open, numMessages, fps): a new control message. `num_messages` < 0
  * = unlimited, `fps` < 0 = unthrottled (dai::GateControl's own defaults). */
 int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out);
+/* NNData: layer names (newline-joined) and one layer's TensorInfo (1 / 0 absent / -1).
+ * The tensor bytes live in the message buffer (dai_msg_data) at `offset`. */
+int dai_nn_data_layer_names(const dai_msg* m, char** out);
+int dai_nn_data_tensor_info(const dai_msg* m, const char* name, dai_tensor_info* out);
+/* ImgDetections */
+int dai_img_detections_count(const dai_msg* m, size_t* out);
+int dai_img_detections_get(const dai_msg* m, size_t index, dai_img_detection* out);
 /* MessageGroup */
 int dai_msg_group_get(const dai_msg* g, const char* name, dai_msg** out); /* 1 / 0 absent / -1 */
 int dai_msg_group_num_messages(const dai_msg* g, int64_t* out);

@@ -6,3 +6,4 @@ Cargo.lock.bak
 # depthai-core writes its telemetry/cache into the cwd when a pipeline runs
 .cache/
 .pixi/
+.depthai_cached_models/

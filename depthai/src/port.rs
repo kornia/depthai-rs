@@ -38,7 +38,7 @@ impl<M: Message> Output<M> {
         }
     }
 
-    fn raw(&self) -> *mut sys::dai_output {
+    pub(crate) fn raw(&self) -> *mut sys::dai_output {
         self.raw.as_ptr()
     }
 

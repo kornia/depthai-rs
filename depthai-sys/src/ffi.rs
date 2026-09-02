@@ -5,8 +5,9 @@ use std::os::raw::{c_char, c_int};
 
 use crate::{
     dai_bootloader, dai_buffer_info, dai_calib, dai_device, dai_device_info,
-    dai_encoded_frame_info, dai_img_frame_info, dai_imu_packet, dai_input, dai_input_queue,
-    dai_msg, dai_node, dai_output, dai_pipeline, dai_queue,
+    dai_encoded_frame_info, dai_img_detection, dai_img_frame_info, dai_imu_packet, dai_input,
+    dai_input_queue, dai_msg, dai_nn_archive, dai_nn_model_description, dai_node, dai_output,
+    dai_pipeline, dai_queue, dai_tensor_info,
 };
 
 extern "C" {
@@ -78,6 +79,14 @@ extern "C" {
     ) -> c_int;
     pub fn dai_pipeline_create_imu(p: *mut dai_pipeline, out: *mut *mut dai_node) -> c_int;
     pub fn dai_pipeline_create_gate(p: *mut dai_pipeline, out: *mut *mut dai_node) -> c_int;
+    pub fn dai_pipeline_create_neural_network(
+        p: *mut dai_pipeline,
+        out: *mut *mut dai_node,
+    ) -> c_int;
+    pub fn dai_pipeline_create_detection_network(
+        p: *mut dai_pipeline,
+        out: *mut *mut dai_node,
+    ) -> c_int;
     pub fn dai_node_release(n: *mut dai_node);
     pub fn dai_node_id(n: *const dai_node, out: *mut i64) -> c_int;
     pub fn dai_node_type_name(n: *const dai_node, out: *mut *const c_char) -> c_int;
@@ -172,6 +181,60 @@ extern "C" {
     pub fn dai_video_encoder_set_quality(e: *mut dai_node, quality: i32) -> c_int;
     pub fn dai_video_encoder_set_lossless(e: *mut dai_node, lossless: c_int) -> c_int;
     pub fn dai_gate_set_run_on_host(g: *mut dai_node, run_on_host: c_int) -> c_int;
+    pub fn dai_model_zoo_get(
+        desc: *const dai_nn_model_description,
+        use_cached: c_int,
+        cache_dir: *const c_char,
+        api_key: *const c_char,
+        out_path: *mut *mut c_char,
+    ) -> c_int;
+    pub fn dai_nn_archive_open(path: *const c_char, out: *mut *mut dai_nn_archive) -> c_int;
+    pub fn dai_nn_archive_release(a: *mut dai_nn_archive);
+    pub fn dai_nn_archive_input_size(
+        a: *const dai_nn_archive,
+        index: u32,
+        w: *mut u32,
+        h: *mut u32,
+    ) -> c_int;
+    pub fn dai_neural_network_build_camera(
+        nn: *mut dai_node,
+        camera: *mut dai_node,
+        desc: *const dai_nn_model_description,
+        fps: f32,
+    ) -> c_int;
+    pub fn dai_neural_network_build_output(
+        nn: *mut dai_node,
+        input: *mut dai_output,
+        archive: *const dai_nn_archive,
+    ) -> c_int;
+    pub fn dai_neural_network_set_nn_archive(
+        nn: *mut dai_node,
+        archive: *const dai_nn_archive,
+    ) -> c_int;
+    pub fn dai_neural_network_set_num_inference_threads(nn: *mut dai_node, n: i32) -> c_int;
+    pub fn dai_neural_network_set_num_pool_frames(nn: *mut dai_node, n: i32) -> c_int;
+    pub fn dai_detection_network_build_camera(
+        dn: *mut dai_node,
+        camera: *mut dai_node,
+        desc: *const dai_nn_model_description,
+        fps: f32,
+    ) -> c_int;
+    pub fn dai_detection_network_build_output(
+        dn: *mut dai_node,
+        input: *mut dai_output,
+        archive: *const dai_nn_archive,
+    ) -> c_int;
+    pub fn dai_detection_network_set_confidence_threshold(
+        dn: *mut dai_node,
+        threshold: f32,
+    ) -> c_int;
+    pub fn dai_detection_network_input(dn: *mut dai_node, out: *mut *mut dai_input) -> c_int;
+    pub fn dai_detection_network_out(dn: *mut dai_node, out: *mut *mut dai_output) -> c_int;
+    pub fn dai_detection_network_out_network(dn: *mut dai_node, out: *mut *mut dai_output)
+        -> c_int;
+    pub fn dai_detection_network_passthrough(dn: *mut dai_node, out: *mut *mut dai_output)
+        -> c_int;
+    pub fn dai_detection_network_classes(dn: *mut dai_node, out: *mut *mut c_char) -> c_int;
     pub fn dai_imu_enable_sensor(imu: *mut dai_node, sensor: i32, report_rate_hz: u32) -> c_int;
     pub fn dai_imu_set_batch_report_threshold(imu: *mut dai_node, n: i32) -> c_int;
     pub fn dai_imu_set_max_batch_reports(imu: *mut dai_node, n: i32) -> c_int;
@@ -211,6 +274,18 @@ extern "C" {
         num_messages: i32,
         fps: i32,
         out: *mut *mut dai_msg,
+    ) -> c_int;
+    pub fn dai_nn_data_layer_names(m: *const dai_msg, out: *mut *mut c_char) -> c_int;
+    pub fn dai_nn_data_tensor_info(
+        m: *const dai_msg,
+        name: *const c_char,
+        out: *mut dai_tensor_info,
+    ) -> c_int;
+    pub fn dai_img_detections_count(m: *const dai_msg, out: *mut usize) -> c_int;
+    pub fn dai_img_detections_get(
+        m: *const dai_msg,
+        index: usize,
+        out: *mut dai_img_detection,
     ) -> c_int;
     pub fn dai_msg_group_get(
         g: *const dai_msg,

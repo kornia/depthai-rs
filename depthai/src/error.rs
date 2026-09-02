@@ -20,6 +20,10 @@ pub enum DepthaiError {
     /// as. The message is consumed.
     #[error("unexpected message type: expected {expected:?}, got {got:?}")]
     UnexpectedDatatype { expected: Datatype, got: Datatype },
+    /// A message's payload does not fit what its metadata claims (a tensor that
+    /// extends past its `NNData` buffer).
+    #[error("malformed message: {0}")]
+    Malformed(String),
     /// A `&str` argument contained an interior NUL byte.
     #[error("argument contains a NUL byte: {0}")]
     Nul(#[from] std::ffi::NulError),

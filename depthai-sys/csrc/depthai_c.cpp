@@ -11,6 +11,7 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -40,7 +41,13 @@
 #include "depthai/pipeline/datatype/MessageGroup.hpp"
 #include "depthai/pipeline/datatype/StereoDepthConfig.hpp"
 #include "depthai/pipeline/node/Camera.hpp"
+#include "depthai/modelzoo/Zoo.hpp"
+#include "depthai/nn_archive/NNArchive.hpp"
+#include "depthai/pipeline/datatype/ImgDetections.hpp"
+#include "depthai/pipeline/datatype/NNData.hpp"
+#include "depthai/pipeline/node/DetectionNetwork.hpp"
 #include "depthai/pipeline/node/Gate.hpp"
+#include "depthai/pipeline/node/NeuralNetwork.hpp"
 #include "depthai/pipeline/node/IMU.hpp"
 #include "depthai/pipeline/node/StereoDepth.hpp"
 #include "depthai/pipeline/node/Sync.hpp"
@@ -89,6 +96,23 @@ DAI_PIN(dai::DatatypeEnum::Buffer, DAI_DT_BUFFER);
 DAI_PIN(dai::DatatypeEnum::ImgFrame, DAI_DT_IMG_FRAME);
 DAI_PIN(dai::DatatypeEnum::EncodedFrame, DAI_DT_ENCODED_FRAME);
 DAI_PIN(dai::DatatypeEnum::GateControl, DAI_DT_GATE_CONTROL);
+DAI_PIN(dai::DatatypeEnum::NNData, DAI_DT_NN_DATA);
+DAI_PIN(dai::DatatypeEnum::ImgDetections, DAI_DT_IMG_DETECTIONS);
+
+DAI_PIN(dai::TensorInfo::DataType::FP16, DAI_TENSOR_FP16);
+DAI_PIN(dai::TensorInfo::DataType::U8F, DAI_TENSOR_U8F);
+DAI_PIN(dai::TensorInfo::DataType::INT, DAI_TENSOR_INT);
+DAI_PIN(dai::TensorInfo::DataType::FP32, DAI_TENSOR_FP32);
+DAI_PIN(dai::TensorInfo::DataType::I8, DAI_TENSOR_I8);
+DAI_PIN(dai::TensorInfo::DataType::FP64, DAI_TENSOR_FP64);
+DAI_PIN(dai::TensorInfo::DataType::U16F, DAI_TENSOR_U16F);
+DAI_PIN(dai::TensorInfo::StorageOrder::NHWC, DAI_ORDER_NHWC);
+DAI_PIN(dai::TensorInfo::StorageOrder::NHCW, DAI_ORDER_NHCW);
+DAI_PIN(dai::TensorInfo::StorageOrder::NCHW, DAI_ORDER_NCHW);
+DAI_PIN(dai::TensorInfo::StorageOrder::HWC, DAI_ORDER_HWC);
+DAI_PIN(dai::TensorInfo::StorageOrder::CHW, DAI_ORDER_CHW);
+DAI_PIN(dai::TensorInfo::StorageOrder::NC, DAI_ORDER_NC);
+DAI_PIN(dai::TensorInfo::StorageOrder::C, DAI_ORDER_C);
 DAI_PIN(dai::DatatypeEnum::IMUData, DAI_DT_IMU_DATA);
 DAI_PIN(dai::DatatypeEnum::MessageGroup, DAI_DT_MESSAGE_GROUP);
 
@@ -172,6 +196,8 @@ static_assert(sizeof(dai_imu_vec_report) == 56, "dai_imu_vec_report layout chang
 static_assert(sizeof(dai_imu_rotvec_report) == 64, "dai_imu_rotvec_report layout changed");
 static_assert(sizeof(dai_imu_packet) == 232, "dai_imu_packet layout changed");
 static_assert(sizeof(dai_encoded_frame_info) == 56, "dai_encoded_frame_info layout changed");
+static_assert(sizeof(dai_tensor_info) == 152, "dai_tensor_info layout changed");
+static_assert(sizeof(dai_img_detection) == 88, "dai_img_detection layout changed");
 
 // ---------------------------------------------------------------------------
 // Handle definitions
@@ -201,6 +227,9 @@ struct dai_calib {
 };
 struct dai_bootloader {
     std::unique_ptr<dai::DeviceBootloader> ptr;
+};
+struct dai_nn_archive {
+    dai::NNArchive archive;
 };
 // dai_output / dai_input are never defined: they are reinterpret_casts of the
 // node-owned dai::Node::Output* / Input* pointers.
@@ -287,6 +316,22 @@ static void from_dai_info(const dai::DeviceInfo& i, dai_device_info& o) {
     o.protocol = (int32_t)i.protocol;
     o.platform = (int32_t)i.platform;
     o.status = (int32_t)i.status;
+}
+
+static dai::NNModelDescription to_dai_desc(const dai_nn_model_description& d) {
+    dai::NNModelDescription desc;
+    if(d.model) desc.model = d.model;
+    if(d.platform) desc.platform = d.platform;
+    if(d.optimization_level) desc.optimizationLevel = d.optimization_level;
+    if(d.compression_level) desc.compressionLevel = d.compression_level;
+    if(d.snpe_version) desc.snpeVersion = d.snpe_version;
+    if(d.model_precision_type) desc.modelPrecisionType = d.model_precision_type;
+    return desc;
+}
+
+static const dai::NNArchive& archive_of(const dai_nn_archive* a) {
+    if(!a) throw std::invalid_argument("null NNArchive handle");
+    return a->archive;
 }
 
 static int64_t steady_ns(std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> t) {
@@ -621,6 +666,8 @@ DAI_CREATE_NODE(dai_pipeline_create_stereo_depth, dai::node::StereoDepth)
 DAI_CREATE_NODE(dai_pipeline_create_video_encoder, dai::node::VideoEncoder)
 DAI_CREATE_NODE(dai_pipeline_create_imu, dai::node::IMU)
 DAI_CREATE_NODE(dai_pipeline_create_gate, dai::node::Gate)
+DAI_CREATE_NODE(dai_pipeline_create_neural_network, dai::node::NeuralNetwork)
+DAI_CREATE_NODE(dai_pipeline_create_detection_network, dai::node::DetectionNetwork)
 
 // ---------------------------------------------------------------------------
 // Node (common)
@@ -959,6 +1006,161 @@ int dai_input_queue_send(dai_input_queue* q, const dai_msg* m) {
 }
 
 // ---------------------------------------------------------------------------
+// Model zoo + NNArchive
+// ---------------------------------------------------------------------------
+int dai_model_zoo_get(const dai_nn_model_description* desc, int use_cached, const char* cache_dir, const char* api_key,
+                      char** out_path) {
+    DAI_REQUIRE(desc && out_path, "null argument");
+    DAI_GUARD(dai_model_zoo_get, {
+        auto path = dai::getModelFromZoo(to_dai_desc(*desc), use_cached != 0, std::string(cache_dir ? cache_dir : ""),
+                                         std::string(api_key ? api_key : ""), "none");
+        *out_path = dup_string(path.string());
+        return DAI_OK;
+    })
+}
+int dai_nn_archive_open(const char* path, dai_nn_archive** out) {
+    DAI_REQUIRE(path && out, "null argument");
+    DAI_GUARD(dai_nn_archive_open, {
+        *out = new dai_nn_archive{dai::NNArchive(std::filesystem::path(path))};
+        return DAI_OK;
+    })
+}
+void dai_nn_archive_release(dai_nn_archive* a) {
+    delete a;
+}
+int dai_nn_archive_input_size(const dai_nn_archive* a, uint32_t index, uint32_t* w, uint32_t* h) {
+    DAI_REQUIRE(w && h, "null out pointer");
+    DAI_GUARD(dai_nn_archive_input_size, {
+        auto size = archive_of(a).getInputSize(index);
+        if(!size) return 0;
+        *w = size->first;
+        *h = size->second;
+        return 1;
+    })
+}
+
+// ---------------------------------------------------------------------------
+// NeuralNetwork
+// ---------------------------------------------------------------------------
+int dai_neural_network_build_camera(dai_node* nn, dai_node* camera, const dai_nn_model_description* desc, float fps) {
+    DAI_REQUIRE(desc, "null model description");
+    DAI_GUARD(dai_neural_network_build_camera, {
+        DAI_LOCK_GRAPH;
+        auto net = node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork");
+        auto cam = node_as<dai::node::Camera>(camera, "Camera");
+        dai::node::NeuralNetwork::Model model = to_dai_desc(*desc);
+        std::optional<float> f;
+        if(fps > 0.0f) f = fps;
+        net->build(cam, model, f);
+        return DAI_OK;
+    })
+}
+int dai_neural_network_build_output(dai_node* nn, dai_output* input, const dai_nn_archive* archive) {
+    DAI_REQUIRE(input, "null output port");
+    DAI_GUARD(dai_neural_network_build_output, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork")->build(*as_output(input), archive_of(archive));
+        return DAI_OK;
+    })
+}
+int dai_neural_network_set_nn_archive(dai_node* nn, const dai_nn_archive* archive) {
+    DAI_GUARD(dai_neural_network_set_nn_archive, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork")->setNNArchive(archive_of(archive));
+        return DAI_OK;
+    })
+}
+int dai_neural_network_set_num_inference_threads(dai_node* nn, int32_t n) {
+    DAI_GUARD(dai_neural_network_set_num_inference_threads, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork")->setNumInferenceThreads((int)n);
+        return DAI_OK;
+    })
+}
+int dai_neural_network_set_num_pool_frames(dai_node* nn, int32_t n) {
+    DAI_GUARD(dai_neural_network_set_num_pool_frames, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::NeuralNetwork>(nn, "NeuralNetwork")->setNumPoolFrames((int)n);
+        return DAI_OK;
+    })
+}
+
+// ---------------------------------------------------------------------------
+// DetectionNetwork
+// ---------------------------------------------------------------------------
+int dai_detection_network_build_camera(dai_node* dn, dai_node* camera, const dai_nn_model_description* desc, float fps) {
+    DAI_REQUIRE(desc, "null model description");
+    DAI_GUARD(dai_detection_network_build_camera, {
+        DAI_LOCK_GRAPH;
+        auto net = node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork");
+        auto cam = node_as<dai::node::Camera>(camera, "Camera");
+        dai::node::DetectionNetwork::Model model = to_dai_desc(*desc);
+        std::optional<float> f;
+        if(fps > 0.0f) f = fps;
+        net->build(cam, model, f);
+        return DAI_OK;
+    })
+}
+int dai_detection_network_build_output(dai_node* dn, dai_output* input, const dai_nn_archive* archive) {
+    DAI_REQUIRE(input, "null output port");
+    DAI_GUARD(dai_detection_network_build_output, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->build(*as_output(input), archive_of(archive));
+        return DAI_OK;
+    })
+}
+int dai_detection_network_set_confidence_threshold(dai_node* dn, float threshold) {
+    DAI_GUARD(dai_detection_network_set_confidence_threshold, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->setConfidenceThreshold(threshold);
+        return DAI_OK;
+    })
+}
+int dai_detection_network_input(dai_node* dn, dai_input** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_detection_network_input, {
+        *out = from_input(&node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->input);
+        return DAI_OK;
+    })
+}
+int dai_detection_network_out(dai_node* dn, dai_output** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_detection_network_out, {
+        *out = from_output(&node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->out);
+        return DAI_OK;
+    })
+}
+int dai_detection_network_out_network(dai_node* dn, dai_output** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_detection_network_out_network, {
+        *out = from_output(&node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->outNetwork);
+        return DAI_OK;
+    })
+}
+int dai_detection_network_passthrough(dai_node* dn, dai_output** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_detection_network_passthrough, {
+        *out = from_output(&node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->passthrough);
+        return DAI_OK;
+    })
+}
+int dai_detection_network_classes(dai_node* dn, char** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_detection_network_classes, {
+        auto classes = node_as<dai::node::DetectionNetwork>(dn, "DetectionNetwork")->getClasses();
+        std::string joined;
+        if(classes) {
+            for(const auto& c : *classes) {
+                if(!joined.empty()) joined += '\n';
+                joined += c;
+            }
+        }
+        *out = dup_string(joined);
+        return DAI_OK;
+    })
+}
+
+// ---------------------------------------------------------------------------
 // IMU
 // ---------------------------------------------------------------------------
 int dai_imu_enable_sensor(dai_node* imu, int32_t sensor, uint32_t report_rate_hz) {
@@ -1207,6 +1409,61 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
             o.rotation_vector.real = rv.real;
             o.rotation_vector.accuracy_rad = rv.rotationVectorAccuracy;
         }
+        return DAI_OK;
+    })
+}
+int dai_nn_data_layer_names(const dai_msg* m, char** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_nn_data_layer_names, {
+        std::string joined;
+        for(const auto& n : msg_as<dai::NNData>(m, "NNData")->getAllLayerNames()) {
+            if(!joined.empty()) joined += '\n';
+            joined += n;
+        }
+        *out = dup_string(joined);
+        return DAI_OK;
+    })
+}
+int dai_nn_data_tensor_info(const dai_msg* m, const char* name, dai_tensor_info* out) {
+    DAI_REQUIRE(name && out, "null argument");
+    DAI_GUARD(dai_nn_data_tensor_info, {
+        auto info = msg_as<dai::NNData>(m, "NNData")->getTensorInfo(std::string(name));
+        if(!info) return 0;
+        std::memset(out, 0, sizeof(*out));
+        copy_fixed(out->name, sizeof(out->name), info->name);
+        out->datatype = (int32_t)info->dataType;
+        out->order = (int32_t)info->order;
+        const size_t n = std::min<size_t>(info->dims.size(), 8);
+        out->num_dims = (uint32_t)n;
+        for(size_t i = 0; i < n; ++i) out->dims[i] = info->dims[i];
+        for(size_t i = 0; i < std::min<size_t>(info->strides.size(), 8); ++i) out->strides[i] = info->strides[i];
+        out->offset = info->offset;
+        out->qp_scale = info->qpScale;
+        out->qp_zp = info->qpZp;
+        return 1;
+    })
+}
+int dai_img_detections_count(const dai_msg* m, size_t* out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_img_detections_count, {
+        *out = msg_as<dai::ImgDetections>(m, "ImgDetections")->detections.size();
+        return DAI_OK;
+    })
+}
+int dai_img_detections_get(const dai_msg* m, size_t index, dai_img_detection* out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_img_detections_get, {
+        const auto& dets = msg_as<dai::ImgDetections>(m, "ImgDetections")->detections;
+        DAI_REQUIRE(index < dets.size(), "detection index out of range");
+        const auto& d = dets[index];
+        std::memset(out, 0, sizeof(*out));
+        out->label = d.label;
+        out->confidence = d.confidence;
+        out->xmin = d.xmin;
+        out->ymin = d.ymin;
+        out->xmax = d.xmax;
+        out->ymax = d.ymax;
+        copy_fixed(out->label_name, sizeof(out->label_name), d.labelName);
         return DAI_OK;
     })
 }

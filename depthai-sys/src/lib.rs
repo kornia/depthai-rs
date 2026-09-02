@@ -48,7 +48,8 @@ opaque!(
     dai_input_queue,
     dai_msg,
     dai_calib,
-    dai_bootloader
+    dai_bootloader,
+    dai_nn_archive
 );
 
 // ---------------------------------------------------------------------------
@@ -92,6 +93,8 @@ pub const DAI_DT_BUFFER: i32 = 1;
 pub const DAI_DT_IMG_FRAME: i32 = 2;
 pub const DAI_DT_ENCODED_FRAME: i32 = 3;
 pub const DAI_DT_GATE_CONTROL: i32 = 5;
+pub const DAI_DT_NN_DATA: i32 = 6;
+pub const DAI_DT_IMG_DETECTIONS: i32 = 9;
 pub const DAI_DT_IMU_DATA: i32 = 19;
 pub const DAI_DT_MESSAGE_GROUP: i32 = 28;
 
@@ -164,6 +167,21 @@ pub const DAI_ENC_FRAME_I: i32 = 0;
 pub const DAI_ENC_FRAME_P: i32 = 1;
 pub const DAI_ENC_FRAME_B: i32 = 2;
 pub const DAI_ENC_FRAME_UNKNOWN: i32 = 3;
+
+pub const DAI_TENSOR_FP16: i32 = 0;
+pub const DAI_TENSOR_U8F: i32 = 1;
+pub const DAI_TENSOR_INT: i32 = 2;
+pub const DAI_TENSOR_FP32: i32 = 3;
+pub const DAI_TENSOR_I8: i32 = 4;
+pub const DAI_TENSOR_FP64: i32 = 5;
+pub const DAI_TENSOR_U16F: i32 = 6;
+pub const DAI_ORDER_NHWC: i32 = 0x4213;
+pub const DAI_ORDER_NHCW: i32 = 0x4231;
+pub const DAI_ORDER_NCHW: i32 = 0x4321;
+pub const DAI_ORDER_HWC: i32 = 0x213;
+pub const DAI_ORDER_CHW: i32 = 0x321;
+pub const DAI_ORDER_NC: i32 = 0x43;
+pub const DAI_ORDER_C: i32 = 0x3;
 
 pub const DAI_PLATFORM_RVC2: i32 = 0;
 pub const DAI_PLATFORM_RVC3: i32 = 1;
@@ -279,6 +297,60 @@ pub struct dai_imu_packet {
     pub rotation_vector: dai_imu_rotvec_report,
 }
 
+/// `dai::NNModelDescription`; NULL fields take depthai's defaults.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct dai_nn_model_description {
+    pub model: *const core::ffi::c_char,
+    pub platform: *const core::ffi::c_char,
+    pub optimization_level: *const core::ffi::c_char,
+    pub compression_level: *const core::ffi::c_char,
+    pub snpe_version: *const core::ffi::c_char,
+    pub model_precision_type: *const core::ffi::c_char,
+}
+
+/// `dai::TensorInfo`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct dai_tensor_info {
+    pub name: [u8; 64],
+    pub datatype: i32,
+    pub order: i32,
+    pub num_dims: u32,
+    pub dims: [u32; 8],
+    pub strides: [u32; 8],
+    pub offset: u32,
+    pub qp_scale: f32,
+    pub qp_zp: f32,
+}
+
+impl Default for dai_tensor_info {
+    fn default() -> Self {
+        // SAFETY: all-zero is valid for every field.
+        unsafe { core::mem::zeroed() }
+    }
+}
+
+/// `dai::ImgDetection`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct dai_img_detection {
+    pub label: u32,
+    pub confidence: f32,
+    pub xmin: f32,
+    pub ymin: f32,
+    pub xmax: f32,
+    pub ymax: f32,
+    pub label_name: [u8; 64],
+}
+
+impl Default for dai_img_detection {
+    fn default() -> Self {
+        // SAFETY: all-zero is valid for every field.
+        unsafe { core::mem::zeroed() }
+    }
+}
+
 /// `dai::EncodedFrame` metadata.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -312,6 +384,8 @@ mod tests {
         assert_eq!(size_of::<dai_imu_rotvec_report>(), 64);
         assert_eq!(size_of::<dai_imu_packet>(), 232);
         assert_eq!(size_of::<dai_encoded_frame_info>(), 56);
+        assert_eq!(size_of::<dai_tensor_info>(), 152);
+        assert_eq!(size_of::<dai_img_detection>(), 88);
         assert_eq!(align_of::<dai_img_frame_info>(), 8);
         assert_eq!(align_of::<dai_imu_packet>(), 8);
     }
