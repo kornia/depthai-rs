@@ -531,6 +531,8 @@ int dai_video_encoder_set_lossless(dai_node* e, int lossless);
 /* Gate                                                                       */
 /* ------------------------------------------------------------------------- */
 int dai_gate_set_run_on_host(dai_node* g, int run_on_host);
+/* Gate::initialConfig = control (a GateControl message): the state at start. */
+int dai_gate_set_initial_config(dai_node* g, const dai_msg* control);
 /* ports: input "input", "inputControl" (GateControl); output "output" */
 
 /* ------------------------------------------------------------------------- */

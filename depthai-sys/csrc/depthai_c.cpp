@@ -1025,6 +1025,13 @@ int dai_gate_set_run_on_host(dai_node* g, int run_on_host) {
         return DAI_OK;
     })
 }
+int dai_gate_set_initial_config(dai_node* g, const dai_msg* control) {
+    DAI_GUARD(dai_gate_set_initial_config, {
+        DAI_LOCK_GRAPH;
+        node_as<dai::node::Gate>(g, "Gate")->initialConfig = msg_as<dai::GateControl>(control, "GateControl");
+        return DAI_OK;
+    })
+}
 
 // ---------------------------------------------------------------------------
 // InputQueue (host -> device)

@@ -91,6 +91,7 @@ int dai_video_encoder_set_num_bframes(dai_node* e, int32_t n) { return DAI_ERR; 
 int dai_video_encoder_set_quality(dai_node* e, int32_t quality) { return DAI_ERR; }
 int dai_video_encoder_set_lossless(dai_node* e, int lossless) { return DAI_ERR; }
 int dai_gate_set_run_on_host(dai_node* g, int run_on_host) { return DAI_ERR; }
+int dai_gate_set_initial_config(dai_node* g, const dai_msg* control) { return DAI_ERR; }
 int dai_model_zoo_get(const dai_nn_model_description* desc, int use_cached, const char* cache_dir, const char* api_key, char** out_path) { return DAI_ERR; }
 int dai_nn_archive_open(const char* path, dai_nn_archive** out) { return DAI_ERR; }
 void dai_nn_archive_release(dai_nn_archive* a) {}

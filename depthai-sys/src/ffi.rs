@@ -181,6 +181,7 @@ extern "C" {
     pub fn dai_video_encoder_set_quality(e: *mut dai_node, quality: i32) -> c_int;
     pub fn dai_video_encoder_set_lossless(e: *mut dai_node, lossless: c_int) -> c_int;
     pub fn dai_gate_set_run_on_host(g: *mut dai_node, run_on_host: c_int) -> c_int;
+    pub fn dai_gate_set_initial_config(g: *mut dai_node, control: *const dai_msg) -> c_int;
     pub fn dai_model_zoo_get(
         desc: *const dai_nn_model_description,
         use_cached: c_int,

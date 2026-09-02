@@ -4,7 +4,7 @@
 use depthai_sys as sys;
 
 use crate::error::{check, Result};
-use crate::message::AnyMessage;
+use crate::message::{AnyMessage, GateControl, Message};
 use crate::node::node_type;
 use crate::port::{Input, Output};
 
@@ -36,6 +36,12 @@ impl Gate {
     /// Where [`GateControl`](crate::GateControl) messages go.
     pub fn input_control(&self) -> Result<Input> {
         self.0.input_required("inputControl")
+    }
+
+    /// `initialConfig`: the gate's state when the pipeline starts (open by
+    /// default). Set before `Pipeline::start`.
+    pub fn set_initial_config(&self, control: &GateControl) -> Result<()> {
+        check(unsafe { sys::dai_gate_set_initial_config(self.0.raw(), control.as_any().raw()) })
     }
 
     /// Run the valve on the host instead of the device (then frames still cross
