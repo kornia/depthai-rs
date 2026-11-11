@@ -4,7 +4,11 @@
 //! frames carried an exposure and its range, and each stream's stamp offset from the rectified
 //! left eye at END and at MIDDLE of exposure (`timestamp - exposure / 2`).
 //!
-//! `cargo run --release --example exposure_probe [-- <device-id-or-ip> [seconds] [fps]]`
+//! `cargo run --release --example exposure_probe [-- [--usb-super] <device-id-or-ip> [seconds] [fps]]`
+//!
+//! The link is capped at USB2 unless `--usb-super`, as xle-oakd's `open_device` does: depthai's
+//! default boots the device into a USB3 descriptor that a USB2 link cannot reconnect to, and the
+//! open fails with `X_LINK_DEVICE_NOT_FOUND`. Every visible device and its state is listed first.
 //!
 //! It answers: does `StereoDepth` carry its inputs' exposure onto the rectified eyes and the
 //! depth map, and does the encoder carry the colour sensor's onto the bitstream? A stream
@@ -15,7 +19,7 @@ use std::time::{Duration, Instant};
 use depthai::node::{Camera, StereoDepth, VideoEncoder};
 use depthai::{
     CameraBoardSocket, Device, ImgFrame, ImgFrameType, ImgResizeMode, Message, OutputQueue,
-    Pipeline, StereoPresetMode, VideoEncoderProfile,
+    Pipeline, StereoPresetMode, UsbSpeed, VideoEncoderProfile,
 };
 
 /// One stream's frames as `(end stamp ns, exposure)`.
@@ -53,13 +57,28 @@ fn median(mut v: Vec<f64>) -> Option<f64> {
 }
 
 fn main() -> depthai::Result<()> {
-    let mut args = std::env::args().skip(1);
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let usb_super = args.iter().any(|a| a == "--usb-super");
+    args.retain(|a| a != "--usb-super");
+    let mut args = args.into_iter();
     let id = args.next().filter(|s| !s.is_empty());
     let secs: u64 = args.next().map_or(5, |s| s.parse().expect("seconds"));
     let fps: f32 = args.next().map_or(15.0, |s| s.parse().expect("fps"));
     let (w, h) = (640u32, 400u32);
 
-    let dev = Device::open(id.as_deref(), None)?;
+    for d in Device::all_available()? {
+        println!(
+            "found {} ({}) {:?} {:?} {:?} status={}",
+            d.device_id, d.name, d.state, d.protocol, d.platform, d.status
+        );
+    }
+    let speed = if usb_super {
+        UsbSpeed::Super
+    } else {
+        UsbSpeed::High
+    };
+    let dev = Device::open(id.as_deref(), Some(speed))?;
+    println!("opened on {:?} (cap {speed:?})", dev.usb_speed()?);
     let cams = dev.connected_cameras()?;
     println!("device {} cameras {cams:?}  {w}x{h}@{fps}", dev.id()?);
 
