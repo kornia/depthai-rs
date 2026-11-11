@@ -251,6 +251,8 @@ pub struct dai_img_frame_info {
     pub timestamp_ns: i64,
     pub timestamp_device_ns: i64,
     pub data_len: usize,
+    /// `getExposureTime()` in microseconds; 0 when the frame carries none.
+    pub exposure_us: u64,
 }
 
 /// One `dai::IMUReport` with x/y/z.
@@ -369,6 +371,8 @@ pub struct dai_encoded_frame_info {
     pub sequence_num: i64,
     pub timestamp_ns: i64,
     pub data_len: usize,
+    /// `getExposureTime()` in microseconds; 0 when the frame carries none.
+    pub exposure_us: u64,
 }
 
 #[cfg(test)]
@@ -382,15 +386,25 @@ mod tests {
     fn pod_layouts_match_header() {
         assert_eq!(size_of::<dai_device_info>(), 152);
         assert_eq!(size_of::<dai_buffer_info>(), 48);
-        assert_eq!(size_of::<dai_img_frame_info>(), 56);
+        assert_eq!(size_of::<dai_img_frame_info>(), 64);
         assert_eq!(size_of::<dai_imu_vec_report>(), 56);
         assert_eq!(size_of::<dai_imu_rotvec_report>(), 64);
         assert_eq!(size_of::<dai_imu_packet>(), 232);
-        assert_eq!(size_of::<dai_encoded_frame_info>(), 56);
+        assert_eq!(size_of::<dai_encoded_frame_info>(), 64);
         assert_eq!(size_of::<dai_tensor_info>(), 164);
         assert_eq!(size_of::<dai_img_detection>(), 88);
         assert_eq!(align_of::<dai_img_frame_info>(), 8);
         assert_eq!(align_of::<dai_imu_packet>(), 8);
+    }
+
+    // `exposure_us` was appended; it must sit where the C side writes it.
+    #[test]
+    fn exposure_is_the_last_field() {
+        assert_eq!(core::mem::offset_of!(dai_img_frame_info, exposure_us), 56);
+        assert_eq!(
+            core::mem::offset_of!(dai_encoded_frame_info, exposure_us),
+            56
+        );
     }
 
     #[test]

@@ -1,5 +1,7 @@
 //! [`ImgFrame`]: one image (or encoder bitstream chunk) from the device.
 
+use std::time::Duration;
+
 use depthai_sys as sys;
 
 use crate::enums::{Datatype, ImgFrameType};
@@ -27,6 +29,7 @@ pub struct ImgFrameInfo {
 pub struct ImgFrame {
     any: AnyMessage,
     info: ImgFrameInfo,
+    exposure: Duration,
 }
 
 impl Sealed for ImgFrame {}
@@ -43,7 +46,11 @@ impl Message for ImgFrame {
             img_type: ImgFrameType::from_raw(raw.type_),
             instance_num: raw.instance_num,
         };
-        Ok(ImgFrame { any, info })
+        Ok(ImgFrame {
+            any,
+            info,
+            exposure: Duration::from_micros(raw.exposure_us),
+        })
     }
 
     fn as_any(&self) -> &AnyMessage {
@@ -64,6 +71,13 @@ impl ImgFrame {
 
     pub fn width(&self) -> u32 {
         self.info.width
+    }
+
+    /// `getExposureTime()`: how long the sensor exposed this frame. [`Duration::ZERO`] when
+    /// the frame carries none. [`timestamp`](Message::timestamp) is the END of that exposure,
+    /// so `timestamp - exposure / 2` is `getTimestamp(CameraExposureOffset::MIDDLE)`.
+    pub fn exposure(&self) -> Duration {
+        self.exposure
     }
 
     pub fn height(&self) -> u32 {

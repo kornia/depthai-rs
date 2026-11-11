@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <climits>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -191,11 +192,13 @@ DAI_PIN(dai::Platform::RVC4, DAI_PLATFORM_RVC4);
 // POD layout pins (mirrored by size_of tests in depthai-sys/src/lib.rs).
 static_assert(sizeof(dai_device_info) == 152, "dai_device_info layout changed");
 static_assert(sizeof(dai_buffer_info) == 48, "dai_buffer_info layout changed");
-static_assert(sizeof(dai_img_frame_info) == 56, "dai_img_frame_info layout changed");
+static_assert(sizeof(dai_img_frame_info) == 64, "dai_img_frame_info layout changed");
 static_assert(sizeof(dai_imu_vec_report) == 56, "dai_imu_vec_report layout changed");
 static_assert(sizeof(dai_imu_rotvec_report) == 64, "dai_imu_rotvec_report layout changed");
 static_assert(sizeof(dai_imu_packet) == 232, "dai_imu_packet layout changed");
-static_assert(sizeof(dai_encoded_frame_info) == 56, "dai_encoded_frame_info layout changed");
+static_assert(sizeof(dai_encoded_frame_info) == 64, "dai_encoded_frame_info layout changed");
+static_assert(offsetof(dai_img_frame_info, exposure_us) == 56, "dai_img_frame_info layout changed");
+static_assert(offsetof(dai_encoded_frame_info, exposure_us) == 56, "dai_encoded_frame_info layout changed");
 static_assert(sizeof(dai_tensor_info) == 164, "dai_tensor_info layout changed");
 static_assert(sizeof(dai_img_detection) == 88, "dai_img_detection layout changed");
 
@@ -354,6 +357,11 @@ static const dai::NNArchive& archive_of(const dai_nn_archive* a) {
 
 static int64_t steady_ns(std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> t) {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
+}
+
+// A negative exposure is not one the sensor took; it reads as "none", like an unset 0.
+static uint64_t exposure_us(std::chrono::microseconds e) {
+    return e.count() > 0 ? static_cast<uint64_t>(e.count()) : 0;
 }
 
 template <class T>
@@ -1335,6 +1343,7 @@ int dai_img_frame_get_info(const dai_msg* m, dai_img_frame_info* out) {
         out->timestamp_ns = steady_ns(f->getTimestamp());
         out->timestamp_device_ns = steady_ns(f->getTimestampDevice());
         out->data_len = static_cast<const dai::ImgFrame&>(*f).getData().size();
+        out->exposure_us = exposure_us(f->getExposureTime());
         return DAI_OK;
     })
 }
@@ -1372,6 +1381,7 @@ int dai_encoded_frame_get_info(const dai_msg* m, dai_encoded_frame_info* out) {
         out->sequence_num = f->getSequenceNum();
         out->timestamp_ns = steady_ns(f->getTimestamp());
         out->data_len = static_cast<const dai::EncodedFrame&>(*f).getData().size();
+        out->exposure_us = exposure_us(f->getExposureTime());
         return DAI_OK;
     })
 }

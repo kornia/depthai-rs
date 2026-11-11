@@ -276,7 +276,8 @@ typedef struct dai_img_frame_info {
     int64_t timestamp_ns;        /* getTimestamp(): host steady_clock, ns since its epoch */
     int64_t timestamp_device_ns; /* getTimestampDevice(): device clock, ns since boot */
     size_t data_len;             /* getData().size() */
-} dai_img_frame_info; /* sizeof == 56 */
+    uint64_t exposure_us;        /* getExposureTime(), us; 0 when the frame carries none */
+} dai_img_frame_info; /* sizeof == 64 */
 
 /* One dai::IMUReport with x/y/z (accelerometer, gyroscope, magnetometer).
  * Timestamps are the RAW sec/nsec pair the firmware wrote: a {0,0} pair is the
@@ -369,7 +370,8 @@ typedef struct dai_encoded_frame_info {
     int64_t sequence_num;
     int64_t timestamp_ns;
     size_t data_len;
-} dai_encoded_frame_info; /* sizeof == 56 */
+    uint64_t exposure_us; /* getExposureTime(), us; 0 when the frame carries none */
+} dai_encoded_frame_info; /* sizeof == 64 */
 
 /* ------------------------------------------------------------------------- */
 /* Global                                                                     */
