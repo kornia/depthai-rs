@@ -94,6 +94,14 @@ fn stereo_sync_delivers_synced_pairs() {
         assert!(g.is_synced(Duration::from_millis(16)).unwrap());
         let now = depthai::steady_now().unwrap();
         assert!(l.timestamp() <= now, "frame timestamp in the future");
+        // A camera's own output carries the exposure it was taken with; under a frame period.
+        for eye in [&l, &r] {
+            let e = eye.exposure();
+            assert!(
+                e > Duration::ZERO && e < Duration::from_millis(34),
+                "exposure {e:?}"
+            );
+        }
         if retained.is_none() {
             retained = Some(l.clone());
         }

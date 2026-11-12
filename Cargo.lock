@@ -23,7 +23,7 @@ dependencies = [
 
 [[package]]
 name = "depthai"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "depthai-sys",
  "thiserror",
@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "depthai-sys"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cc",
  "cmake",

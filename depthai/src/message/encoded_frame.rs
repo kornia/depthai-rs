@@ -1,6 +1,8 @@
 //! [`EncodedFrame`]: the [`VideoEncoder`](crate::node::VideoEncoder)'s typed
 //! output (`out`), as opposed to its `bitstream` [`ImgFrame`](super::ImgFrame).
 
+use std::time::Duration;
+
 use depthai_sys as sys;
 
 use crate::enums::{Datatype, EncodedFrameProfile, EncodedFrameType};
@@ -25,6 +27,7 @@ pub struct EncodedFrameInfo {
 pub struct EncodedFrame {
     any: AnyMessage,
     info: EncodedFrameInfo,
+    exposure: Duration,
 }
 
 impl Sealed for EncodedFrame {}
@@ -44,7 +47,11 @@ impl Message for EncodedFrame {
             lossless: raw.lossless != 0,
             instance_num: raw.instance_num,
         };
-        Ok(EncodedFrame { any, info })
+        Ok(EncodedFrame {
+            any,
+            info,
+            exposure: Duration::from_micros(raw.exposure_us),
+        })
     }
 
     fn as_any(&self) -> &AnyMessage {
@@ -60,6 +67,12 @@ impl EncodedFrame {
     /// The encoded bytes (Annex-B NAL units for H.264/H.265), zero-copy.
     pub fn data(&self) -> &[u8] {
         self.any.data()
+    }
+
+    /// `getExposureTime()` of the frame that was encoded; [`Duration::ZERO`] when it carries
+    /// none. [`timestamp`](Message::timestamp) is the END of that exposure.
+    pub fn exposure(&self) -> Duration {
+        self.exposure
     }
 
     pub fn is_keyframe(&self) -> bool {
