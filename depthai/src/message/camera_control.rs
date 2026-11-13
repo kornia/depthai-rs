@@ -12,9 +12,9 @@ use crate::message::{typed_from_raw, AnyMessage, Message, Sealed};
 /// [`input_control`](crate::node::Camera::input_control) through an
 /// [`InputQueue`](crate::InputQueue).
 ///
-/// The setters take `&mut self` and mutate the underlying message in place:
-/// finish them before you clone, share or send it (a clone shares the same
-/// message).
+/// Immutable once built, like every message: a clone shares the one underlying message and
+/// `send` queues it for another thread, so there are no setters. Build it with one of the
+/// constructors.
 #[derive(Clone, Debug)]
 pub struct CameraControl {
     any: AnyMessage,
@@ -34,29 +34,28 @@ impl Message for CameraControl {
 }
 
 impl CameraControl {
-    /// `CameraControl()`: an empty control, which changes nothing until a setter runs.
-    pub fn new() -> Result<Self> {
+    /// `CameraControl()` with `setManualFocus(lensPosition)`: `0..=255`; also turns autofocus off.
+    pub fn manual_focus(lens_position: u8) -> Result<Self> {
         let raw = out_handle(|out| unsafe { sys::dai_camera_control_new(out) })?;
         // SAFETY: a fresh owned handle from the shim.
-        unsafe { typed_from_raw(raw) }
+        let control: Self = unsafe { typed_from_raw(raw) }?;
+        // SAFETY: `control` is the only handle to this message until it is returned, so
+        // nothing else can read it while the shim sets the focus.
+        check(unsafe {
+            sys::dai_camera_control_set_manual_focus(control.any.raw().cast_mut(), lens_position)
+        })?;
+        Ok(control)
     }
 
-    /// `setAutoFocusMode(mode)`.
-    pub fn set_auto_focus_mode(&mut self, mode: AutoFocusMode) -> Result<&mut Self> {
-        // SAFETY: `&mut self` is the only handle we hand out for mutation; the shim
-        // mutates the message the handle owns.
+    /// `CameraControl()` with `setAutoFocusMode(mode)`.
+    pub fn auto_focus(mode: AutoFocusMode) -> Result<Self> {
+        let raw = out_handle(|out| unsafe { sys::dai_camera_control_new(out) })?;
+        // SAFETY: a fresh owned handle from the shim.
+        let control: Self = unsafe { typed_from_raw(raw) }?;
+        // SAFETY: as in `manual_focus`.
         check(unsafe {
-            sys::dai_camera_control_set_auto_focus_mode(self.any.raw().cast_mut(), mode.to_raw())
+            sys::dai_camera_control_set_auto_focus_mode(control.any.raw().cast_mut(), mode.to_raw())
         })?;
-        Ok(self)
-    }
-
-    /// `setManualFocus(lensPosition)`: `0..=255`; also turns autofocus off.
-    pub fn set_manual_focus(&mut self, lens_position: u8) -> Result<&mut Self> {
-        // SAFETY: as in `set_auto_focus_mode`.
-        check(unsafe {
-            sys::dai_camera_control_set_manual_focus(self.any.raw().cast_mut(), lens_position)
-        })?;
-        Ok(self)
+        Ok(control)
     }
 }

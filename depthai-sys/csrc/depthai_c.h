@@ -495,7 +495,6 @@ int dai_camera_board_socket(const dai_node* cam, int32_t* out);
 /* Camera::initialControl = control (a CameraControl message, copied): the camera's
  * controls (focus, exposure, ...) when the pipeline starts. Set before start. */
 int dai_camera_set_initial_control(dai_node* cam, const dai_msg* control);
-/* port: input "inputControl" (CameraControl), for runtime control via an input queue */
 /* Camera::requestOutput(size, type?, resize, fps?, undistort?). `type` < 0,
  * `fps` <= 0 and `undistort` < 0 mean nullopt. The returned output is owned by
  * the node. */
@@ -654,8 +653,8 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
 /* GateControl(open, numMessages, fps): a new control message. `num_messages` < 0
  * = unlimited, `fps` < 0 = unthrottled (dai::GateControl's own defaults). */
 int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out);
-/* CameraControl(): a new, empty control message; the setters below mutate it, so
- * build it fully BEFORE sharing or sending it. */
+/* CameraControl(): a new, empty control message. The setters below mutate it, so call them
+ * BEFORE the message is shared or sent: a queued message is read by another thread. */
 int dai_camera_control_new(dai_msg** out);
 /* CameraControl::setAutoFocusMode(mode); `mode` is a DAI_AF_* value. */
 int dai_camera_control_set_auto_focus_mode(dai_msg* ctrl, int32_t mode);

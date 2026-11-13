@@ -328,8 +328,7 @@ fn camera_control_sets_a_fixed_focus() {
     let pipeline = Pipeline::new(&dev).unwrap();
     let cam = pipeline.create::<Camera>().unwrap();
     cam.build(CameraBoardSocket::CamA).unwrap();
-    let mut initial = CameraControl::new().unwrap();
-    initial.set_manual_focus(130).unwrap();
+    let initial = CameraControl::manual_focus(130).unwrap();
     cam.set_initial_control(&initial).unwrap();
     let q = cam
         .request_output(
@@ -352,12 +351,9 @@ fn camera_control_sets_a_fixed_focus() {
         q.get(Duration::from_secs(3)).unwrap().is_some(),
         "frames flow with the initial focus"
     );
-    let mut runtime = CameraControl::new().unwrap();
-    runtime.set_manual_focus(90).unwrap();
-    ctl.send(&runtime).unwrap();
-    let mut af = CameraControl::new().unwrap();
-    af.set_auto_focus_mode(AutoFocusMode::Off).unwrap();
-    ctl.send(&af).unwrap();
+    ctl.send(&CameraControl::manual_focus(90).unwrap()).unwrap();
+    ctl.send(&CameraControl::auto_focus(AutoFocusMode::Off).unwrap())
+        .unwrap();
     assert!(
         q.get(Duration::from_secs(3)).unwrap().is_some(),
         "frames keep flowing after a runtime control"
