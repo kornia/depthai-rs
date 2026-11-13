@@ -129,6 +129,7 @@ extern "C" {
         sensor_fps: f32,
     ) -> c_int;
     pub fn dai_camera_board_socket(cam: *const dai_node, out: *mut i32) -> c_int;
+    pub fn dai_camera_set_initial_control(cam: *mut dai_node, control: *const dai_msg) -> c_int;
     pub fn dai_camera_request_output(
         cam: *mut dai_node,
         w: u32,
@@ -278,6 +279,9 @@ extern "C" {
         fps: i32,
         out: *mut *mut dai_msg,
     ) -> c_int;
+    pub fn dai_camera_control_new(out: *mut *mut dai_msg) -> c_int;
+    pub fn dai_camera_control_set_auto_focus_mode(ctrl: *mut dai_msg, mode: i32) -> c_int;
+    pub fn dai_camera_control_set_manual_focus(ctrl: *mut dai_msg, lens_position: u8) -> c_int;
     pub fn dai_nn_data_tensors(
         m: *const dai_msg,
         out: *mut dai_tensor_info,

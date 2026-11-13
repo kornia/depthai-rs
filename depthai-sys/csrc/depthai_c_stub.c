@@ -63,6 +63,7 @@ int dai_input_set_blocking(dai_input* i, int blocking) { return DAI_ERR; }
 int dai_input_set_max_size(dai_input* i, uint32_t max_size) { return DAI_ERR; }
 int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t sensor_h, float sensor_fps) { return DAI_ERR; }
 int dai_camera_board_socket(const dai_node* cam, int32_t* out) { return DAI_ERR; }
+int dai_camera_set_initial_control(dai_node* cam, const dai_msg* control) { return DAI_ERR; }
 int dai_camera_request_output(dai_node* cam, uint32_t w, uint32_t h, int32_t type, int32_t resize_mode, float fps, int32_t undistort, dai_output** out) { return DAI_ERR; }
 int dai_camera_request_full_resolution_output(dai_node* cam, int32_t type, float fps, int use_highest_resolution, dai_output** out) { return DAI_ERR; }
 int dai_sync_input(dai_node* s, const char* key, dai_input** out) { return DAI_ERR; }
@@ -138,6 +139,9 @@ int dai_img_frame_plane_height(const dai_msg* m, uint32_t* out) { return DAI_ERR
 int dai_encoded_frame_get_info(const dai_msg* m, dai_encoded_frame_info* out) { return DAI_ERR; }
 int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size_t* n) { return DAI_ERR; }
 int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out) { return DAI_ERR; }
+int dai_camera_control_new(dai_msg** out) { return DAI_ERR; }
+int dai_camera_control_set_auto_focus_mode(dai_msg* ctrl, int32_t mode) { return DAI_ERR; }
+int dai_camera_control_set_manual_focus(dai_msg* ctrl, uint8_t lens_position) { return DAI_ERR; }
 int dai_nn_data_tensors(const dai_msg* m, dai_tensor_info* out, size_t cap, size_t* n) { return DAI_ERR; }
 int dai_nn_data_tensor_info(const dai_msg* m, const char* name, dai_tensor_info* out) { return DAI_ERR; }
 int dai_img_detections(const dai_msg* m, dai_img_detection* out, size_t cap, size_t* n) { return DAI_ERR; }

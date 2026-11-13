@@ -7,6 +7,7 @@
 //! past the next poll, or shared into a zero-copy image type, and its bytes stay
 //! valid until the last clone drops.
 
+mod camera_control;
 mod encoded_frame;
 mod gate_control;
 mod img_detections;
@@ -15,6 +16,7 @@ mod imu_data;
 mod message_group;
 mod nn_data;
 
+pub use camera_control::CameraControl;
 pub use encoded_frame::{EncodedFrame, EncodedFrameInfo};
 pub use gate_control::GateControl;
 pub use img_detections::{ImgDetection, ImgDetections};

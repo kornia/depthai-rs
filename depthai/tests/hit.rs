@@ -314,3 +314,52 @@ fn detection_network_runs_zoo_yolo() {
     }
     pipeline.stop().unwrap();
 }
+
+/// CameraControl: a fixed focus installed as `initialControl`, then changed at runtime
+/// through `inputControl`; frames keep flowing through both.
+#[test]
+#[ignore]
+fn camera_control_sets_a_fixed_focus() {
+    if !gate() {
+        return;
+    }
+    use depthai::{AutoFocusMode, CameraControl};
+    let dev = Device::open(None, None).unwrap();
+    let pipeline = Pipeline::new(&dev).unwrap();
+    let cam = pipeline.create::<Camera>().unwrap();
+    cam.build(CameraBoardSocket::CamA).unwrap();
+    let mut initial = CameraControl::new().unwrap();
+    initial.set_manual_focus(130).unwrap();
+    cam.set_initial_control(&initial).unwrap();
+    let q = cam
+        .request_output(
+            (320, 240),
+            Some(ImgFrameType::Nv12),
+            ImgResizeMode::Crop,
+            Some(30.0),
+            None,
+        )
+        .unwrap()
+        .create_output_queue(4, false)
+        .unwrap();
+    let ctl = cam
+        .input_control()
+        .unwrap()
+        .create_input_queue(4, false)
+        .unwrap();
+    pipeline.start().unwrap();
+    assert!(
+        q.get(Duration::from_secs(3)).unwrap().is_some(),
+        "frames flow with the initial focus"
+    );
+    let mut runtime = CameraControl::new().unwrap();
+    runtime.set_manual_focus(90).unwrap();
+    ctl.send(&runtime).unwrap();
+    let mut af = CameraControl::new().unwrap();
+    af.set_auto_focus_mode(AutoFocusMode::Off).unwrap();
+    ctl.send(&af).unwrap();
+    assert!(
+        q.get(Duration::from_secs(3)).unwrap().is_some(),
+        "frames keep flowing after a runtime control"
+    );
+}

@@ -36,6 +36,7 @@
 #include "depthai/pipeline/datatype/Buffer.hpp"
 #include "depthai/pipeline/InputQueue.hpp"
 #include "depthai/pipeline/datatype/EncodedFrame.hpp"
+#include "depthai/pipeline/datatype/CameraControl.hpp"
 #include "depthai/pipeline/datatype/GateControl.hpp"
 #include "depthai/pipeline/datatype/IMUData.hpp"
 #include "depthai/pipeline/datatype/ImgFrame.hpp"
@@ -98,6 +99,14 @@ DAI_PIN(dai::DatatypeEnum::ImgFrame, DAI_DT_IMG_FRAME);
 DAI_PIN(dai::DatatypeEnum::EncodedFrame, DAI_DT_ENCODED_FRAME);
 DAI_PIN(dai::DatatypeEnum::GateControl, DAI_DT_GATE_CONTROL);
 DAI_PIN(dai::DatatypeEnum::NNData, DAI_DT_NN_DATA);
+DAI_PIN(dai::DatatypeEnum::CameraControl, DAI_DT_CAMERA_CONTROL);
+
+DAI_PIN(dai::CameraControl::AutoFocusMode::OFF, DAI_AF_OFF);
+DAI_PIN(dai::CameraControl::AutoFocusMode::AUTO, DAI_AF_AUTO);
+DAI_PIN(dai::CameraControl::AutoFocusMode::MACRO, DAI_AF_MACRO);
+DAI_PIN(dai::CameraControl::AutoFocusMode::CONTINUOUS_VIDEO, DAI_AF_CONTINUOUS_VIDEO);
+DAI_PIN(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE, DAI_AF_CONTINUOUS_PICTURE);
+DAI_PIN(dai::CameraControl::AutoFocusMode::EDOF, DAI_AF_EDOF);
 DAI_PIN(dai::DatatypeEnum::ImgDetections, DAI_DT_IMG_DETECTIONS);
 
 DAI_PIN(dai::TensorInfo::DataType::FP16, DAI_TENSOR_FP16);
@@ -872,6 +881,15 @@ int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t se
         return DAI_OK;
     })
 }
+int dai_camera_set_initial_control(dai_node* cam, const dai_msg* control) {
+    DAI_REQUIRE(control, "null control");
+    DAI_GUARD(dai_camera_set_initial_control, {
+        DAI_LOCK_GRAPH;
+        auto c = node_as<dai::node::Camera>(cam, "Camera");
+        c->initialControl = *msg_as<dai::CameraControl>(control, "CameraControl");
+        return DAI_OK;
+    })
+}
 int dai_camera_board_socket(const dai_node* cam, int32_t* out) {
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_camera_board_socket, {
@@ -1468,6 +1486,25 @@ int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** 
     DAI_REQUIRE(out, "null out pointer");
     DAI_GUARD(dai_gate_control_new, {
         *out = wrap_msg(std::make_shared<dai::GateControl>(open != 0, (int)num_messages, (int)fps));
+        return DAI_OK;
+    })
+}
+int dai_camera_control_new(dai_msg** out) {
+    DAI_REQUIRE(out, "null out pointer");
+    DAI_GUARD(dai_camera_control_new, {
+        *out = wrap_msg(std::make_shared<dai::CameraControl>());
+        return DAI_OK;
+    })
+}
+int dai_camera_control_set_auto_focus_mode(dai_msg* ctrl, int32_t mode) {
+    DAI_GUARD(dai_camera_control_set_auto_focus_mode, {
+        msg_as<dai::CameraControl>(ctrl, "CameraControl")->setAutoFocusMode((dai::CameraControl::AutoFocusMode)mode);
+        return DAI_OK;
+    })
+}
+int dai_camera_control_set_manual_focus(dai_msg* ctrl, uint8_t lens_position) {
+    DAI_GUARD(dai_camera_control_set_manual_focus, {
+        msg_as<dai::CameraControl>(ctrl, "CameraControl")->setManualFocus(lens_position);
         return DAI_OK;
     })
 }

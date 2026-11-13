@@ -94,9 +94,17 @@ pub const DAI_DT_IMG_FRAME: i32 = 2;
 pub const DAI_DT_ENCODED_FRAME: i32 = 3;
 pub const DAI_DT_GATE_CONTROL: i32 = 5;
 pub const DAI_DT_NN_DATA: i32 = 6;
+pub const DAI_DT_CAMERA_CONTROL: i32 = 8;
 pub const DAI_DT_IMG_DETECTIONS: i32 = 9;
 pub const DAI_DT_IMU_DATA: i32 = 19;
 pub const DAI_DT_MESSAGE_GROUP: i32 = 28;
+
+pub const DAI_AF_OFF: i32 = 0;
+pub const DAI_AF_AUTO: i32 = 1;
+pub const DAI_AF_MACRO: i32 = 2;
+pub const DAI_AF_CONTINUOUS_VIDEO: i32 = 3;
+pub const DAI_AF_CONTINUOUS_PICTURE: i32 = 4;
+pub const DAI_AF_EDOF: i32 = 5;
 
 pub const DAI_CAMERA_MODEL_PERSPECTIVE: i32 = 0;
 pub const DAI_CAMERA_MODEL_FISHEYE: i32 = 1;
