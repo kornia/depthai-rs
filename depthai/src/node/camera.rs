@@ -4,9 +4,9 @@ use depthai_sys as sys;
 
 use crate::enums::{opt_raw, CameraBoardSocket, ImgFrameType, ImgResizeMode};
 use crate::error::{check, out_handle, out_val, Result};
-use crate::message::ImgFrame;
+use crate::message::{CameraControl, ImgFrame, Message};
 use crate::node::node_type;
-use crate::port::Output;
+use crate::port::{Input, Output};
 
 node_type!(
     /// A `dai::node::Camera`. Create it, [`build`](Self::build) it onto a socket,
@@ -47,6 +47,18 @@ impl Camera {
             )
         })?;
         Ok(self)
+    }
+
+    /// Where [`CameraControl`] messages go (focus, ...): create an input queue on it
+    /// with [`Input::create_input_queue`] before the pipeline starts.
+    pub fn input_control(&self) -> Result<Input> {
+        self.0.input_required("inputControl")
+    }
+
+    /// `initialControl`: the camera's controls when the pipeline starts, e.g. a
+    /// fixed focus with autofocus off. Copied; set before `Pipeline::start`.
+    pub fn set_initial_control(&self, control: &CameraControl) -> Result<()> {
+        check(unsafe { sys::dai_camera_set_initial_control(self.0.raw(), control.as_any().raw()) })
     }
 
     pub fn board_socket(&self) -> Result<CameraBoardSocket> {

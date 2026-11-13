@@ -102,6 +102,15 @@ enum {
     DAI_IMG_GRAY8 = 30,
     DAI_IMG_NONE = 33,
 };
+/* dai::CameraControl::AutoFocusMode */
+enum {
+    DAI_AF_OFF = 0,
+    DAI_AF_AUTO = 1,
+    DAI_AF_MACRO = 2,
+    DAI_AF_CONTINUOUS_VIDEO = 3,
+    DAI_AF_CONTINUOUS_PICTURE = 4,
+    DAI_AF_EDOF = 5,
+};
 /* dai::DatatypeEnum (subset) */
 enum {
     DAI_DT_ADATATYPE = 0,
@@ -110,6 +119,7 @@ enum {
     DAI_DT_ENCODED_FRAME = 3,
     DAI_DT_GATE_CONTROL = 5,
     DAI_DT_NN_DATA = 6,
+    DAI_DT_CAMERA_CONTROL = 8,
     DAI_DT_IMG_DETECTIONS = 9,
     DAI_DT_IMU_DATA = 19,
     DAI_DT_MESSAGE_GROUP = 28,
@@ -482,6 +492,9 @@ int dai_input_set_max_size(dai_input* i, uint32_t max_size);
  * `sensor_fps` <= 0 mean nullopt. */
 int dai_camera_build(dai_node* cam, int32_t socket, int32_t sensor_w, int32_t sensor_h, float sensor_fps);
 int dai_camera_board_socket(const dai_node* cam, int32_t* out);
+/* Camera::initialControl = control (a CameraControl message, copied): the camera's
+ * controls (focus, exposure, ...) when the pipeline starts. Set before start. */
+int dai_camera_set_initial_control(dai_node* cam, const dai_msg* control);
 /* Camera::requestOutput(size, type?, resize, fps?, undistort?). `type` < 0,
  * `fps` <= 0 and `undistort` < 0 mean nullopt. The returned output is owned by
  * the node. */
@@ -640,6 +653,13 @@ int dai_imu_data_packets(const dai_msg* m, dai_imu_packet* out, size_t cap, size
 /* GateControl(open, numMessages, fps): a new control message. `num_messages` < 0
  * = unlimited, `fps` < 0 = unthrottled (dai::GateControl's own defaults). */
 int dai_gate_control_new(int open, int32_t num_messages, int32_t fps, dai_msg** out);
+/* CameraControl(): a new, empty control message. The setters below mutate it, so call them
+ * BEFORE the message is shared or sent: a queued message is read by another thread. */
+int dai_camera_control_new(dai_msg** out);
+/* CameraControl::setAutoFocusMode(mode); `mode` is a DAI_AF_* value. */
+int dai_camera_control_set_auto_focus_mode(dai_msg* ctrl, int32_t mode);
+/* CameraControl::setManualFocus(lensPosition): 0..255, also switches AF off. */
+int dai_camera_control_set_manual_focus(dai_msg* ctrl, uint8_t lens_position);
 /* NNData::tensors: copies up to `cap` TensorInfos, reports the total in *n. The
  * tensor bytes live in the message buffer (dai_msg_data) at each `offset`. */
 int dai_nn_data_tensors(const dai_msg* m, dai_tensor_info* out, size_t cap, size_t* n);

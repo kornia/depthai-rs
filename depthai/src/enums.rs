@@ -124,6 +124,7 @@ dai_enum! {
         ImgFrame = DAI_DT_IMG_FRAME,
         EncodedFrame = DAI_DT_ENCODED_FRAME,
         GateControl = DAI_DT_GATE_CONTROL,
+        CameraControl = DAI_DT_CAMERA_CONTROL,
         NnData = DAI_DT_NN_DATA,
         ImgDetections = DAI_DT_IMG_DETECTIONS,
         ImuData = DAI_DT_IMU_DATA,
@@ -269,6 +270,23 @@ dai_enum! {
 }
 
 dai_enum! {
+    /// `dai::CameraControl::AutoFocusMode`.
+    AutoFocusMode {
+        /// Autofocus off: the lens stays where the last manual focus put it.
+        Off = DAI_AF_OFF,
+        /// Focus once per trigger, then hold.
+        Auto = DAI_AF_AUTO,
+        Macro = DAI_AF_MACRO,
+        /// Continuous, smooth: for video.
+        ContinuousVideo = DAI_AF_CONTINUOUS_VIDEO,
+        /// Continuous, fast: for stills.
+        ContinuousPicture = DAI_AF_CONTINUOUS_PICTURE,
+        /// Extended depth of field (no lens movement).
+        Edof = DAI_AF_EDOF,
+    }
+}
+
+dai_enum! {
     /// `dai::Platform`.
     Platform {
         Rvc2 = DAI_PLATFORM_RVC2,
@@ -295,6 +313,7 @@ into_i32!(
     XLinkPlatform,
     EncodedFrameProfile,
     EncodedFrameType,
+    AutoFocusMode,
     Platform
 );
 
@@ -345,6 +364,10 @@ mod tests {
         assert_eq!(CameraBoardSocket::Other(42).to_raw(), 42);
         assert_eq!(ImgFrameType::from_raw(30), ImgFrameType::Gray8);
         assert_eq!(Datatype::from_raw(28), Datatype::MessageGroup);
+        assert_eq!(Datatype::from_raw(8), Datatype::CameraControl);
+        assert_eq!(AutoFocusMode::from_raw(0), AutoFocusMode::Off);
+        assert_eq!(AutoFocusMode::ContinuousVideo.to_raw(), 3);
+        assert_eq!(AutoFocusMode::Edof.to_raw(), 5);
         assert_eq!(ImuSensor::GyroscopeRaw.to_raw(), 0x15);
         assert_eq!(DeviceState::from_raw(3), DeviceState::Bootloader);
         assert_eq!(XLinkPlatform::from_raw(2480), XLinkPlatform::MyriadX);
